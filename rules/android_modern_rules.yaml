@@ -1,0 +1,264 @@
+# Modern Android attack-surface rules — covers SafetyNet/Play Integrity,
+# Accessibility / MediaProjection / Overlay abuse, biometric weak-auth,
+# KeyChain exposure, ContentResolver SQLi, autofill leakage, and a handful
+# of WebView toggles missed by the dedicated WebView detector.
+
+rules:
+
+  # ── Attestation ───────────────────────────────────────────────────────
+  - id: SAFETYNET_LEGACY_USED
+    title: "Deprecated SafetyNet Attestation API in use"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-1357
+    cvss: 5.3
+    category: GENERAL
+    description: >
+      SafetyNet Attestation has been retired in favour of Play Integrity.
+      Apps still calling SafetyNetClient.attest will stop working on new
+      devices and lose detection coverage for compromised environments.
+    smali_pattern: 'Lcom/google/android/gms/safetynet/SafetyNetClient;->attest'
+    remediation: "Migrate to Play Integrity API (IntegrityManager.requestIntegrityToken)."
+
+  - id: PLAY_INTEGRITY_NO_SERVER_VERIFY
+    title: "Play Integrity verdict consumed without server-side verification"
+    severity: HIGH
+    confidence: LOW
+    cwe: CWE-345
+    cvss: 6.5
+    category: GENERAL
+    description: >
+      IntegrityTokenResponse.token() is meant to be sent to your server and
+      decoded with Google's API. Apps that read deviceIntegrity / appIntegrity
+      directly on-device skip the signature check entirely, so a hooked or
+      patched app can fake a clean verdict.
+    smali_pattern: 'IntegrityTokenResponse;->token\(\).*deviceIntegrity'
+    multiline: true
+    remediation: "Send the JWS to your backend; verify with Google's Play Integrity decode API before trusting the verdict."
+
+  # ── Privileged services (commonly abused by stalkerware) ──────────────
+  - id: ACCESSIBILITY_SERVICE_DECLARED
+    title: "AccessibilityService implementation present"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-250
+    cvss: 6.0
+    category: PRIVACY
+    description: >
+      AccessibilityService can read text on every screen and inject input
+      events. Required for legitimate accessibility apps; abused by
+      stalkerware, banking trojans, and overlay-based phishers. Must be
+      gated behind a clear opt-in UX with strict justification.
+    smali_pattern: 'Landroid/accessibilityservice/AccessibilityService;'
+    remediation: "Document the accessibility usage in your privacy policy. Flag in Play review notes to avoid policy strikes."
+
+  - id: MEDIA_PROJECTION_REQUEST
+    title: "MediaProjection (screen capture) used"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-359
+    cvss: 7.0
+    category: PRIVACY
+    description: >
+      MediaProjectionManager.createScreenCaptureIntent grants the app live
+      screen-capture and audio-record. It is the standard Android API for
+      recording PII shown in OTHER apps — a high-trust privilege.
+    smali_pattern: 'Landroid/media/projection/MediaProjectionManager;->createScreenCaptureIntent'
+    remediation: "Capture only when the user actively asks. Stop the projection as soon as the user-initiated task ends."
+
+  - id: NOTIFICATION_LISTENER_DECLARED
+    title: "NotificationListenerService bound — reads every notification"
+    severity: MEDIUM
+    confidence: HIGH
+    cwe: CWE-359
+    cvss: 5.5
+    category: PRIVACY
+    description: >
+      NotificationListenerService receives every notification posted on the
+      device, including 2FA codes, message previews, and banking alerts.
+    smali_pattern: 'Landroid/service/notification/NotificationListenerService;'
+    remediation: "If the feature does not strictly require reading every notification, use NotificationManager scoped to your own posts."
+
+  - id: SYSTEM_ALERT_WINDOW_USED
+    title: "Overlay window via TYPE_APPLICATION_OVERLAY / SYSTEM_ALERT_WINDOW"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-1021
+    cvss: 7.0
+    category: GENERAL
+    description: >
+      Drawing on top of other apps enables tap-jacking and phishing overlays.
+      Banking apps mitigate by reading FLAG_WINDOW_IS_OBSCURED; consumer apps
+      should avoid the permission unless the feature is essential.
+    smali_pattern: 'TYPE_APPLICATION_OVERLAY|TYPE_SYSTEM_ALERT_WINDOW'
+    remediation: "Drop SYSTEM_ALERT_WINDOW from the manifest. Modern equivalents (Bubbles, Picture-in-Picture) avoid the abuse vector."
+
+  # ── Biometric / KeyStore weakness ─────────────────────────────────────
+  - id: BIOMETRIC_AUTH_NOT_REQUIRED
+    title: "KeyGenParameterSpec.setUserAuthenticationRequired(false) on a sensitive key"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-287
+    cvss: 6.8
+    category: CRYPTO
+    description: >
+      A key created without setUserAuthenticationRequired can be used silently
+      by any code in the process. For credentials / payment / vault keys the
+      user must re-authenticate on every use.
+    smali_pattern: 'setUserAuthenticationRequired.*const/4 v\d+, 0x0'
+    multiline: true
+    remediation: "Pass true to setUserAuthenticationRequired and configure setUserAuthenticationParameters for the desired validity window."
+
+  - id: KEYCHAIN_EXPOSED
+    title: "KeyChain.getPrivateKey called outside a secure prompt"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-522
+    cvss: 5.4
+    category: CRYPTO
+    description: >
+      KeyChain.getPrivateKey returns a system-managed private key. Make
+      sure the caller has just prompted the user via KeyChain.choosePrivateKeyAlias
+      — using a stored alias bypasses user awareness.
+    smali_pattern: 'Landroid/security/KeyChain;->getPrivateKey'
+    remediation: "Bracket the access with KeyChain.choosePrivateKeyAlias so the user authorises each use; do not cache aliases for headless reuse."
+
+  # ── ContentResolver SQLi (more common than execSQL in modern apps) ────
+  - id: CONTENTRESOLVER_QUERY_STRING_CONCAT
+    title: "ContentResolver.query selection contains string concatenation"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-89
+    cvss: 7.0
+    category: STORAGE
+    description: >
+      ContentResolver.query takes a parameterised selectionArgs[] precisely
+      so callers don't have to concatenate user input into the WHERE clause.
+      Patterns matching `query(uri, ..., "_id = " + foo, ...)` defeat that.
+    smali_pattern: 'ContentResolver;->query.*StringBuilder.*query'
+    multiline: true
+    remediation: "Use selection = \"_id = ?\" and selectionArgs = new String[]{ foo }."
+
+  # ── Autofill ──────────────────────────────────────────────────────────
+  - id: AUTOFILL_LEAK_OPT_IN
+    title: "Field marked IMPORTANT_FOR_AUTOFILL_YES on a sensitive view"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-359
+    cvss: 3.7
+    category: PRIVACY
+    description: >
+      IMPORTANT_FOR_AUTOFILL_YES on a password / OTP / card-number field
+      tells third-party autofill providers that they may store the value.
+      Use IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS for transient OTPs.
+    smali_pattern: 'setImportantForAutofill.*const/4 v\d+, 0x1'
+    multiline: true
+    remediation: "Use NO / NO_EXCLUDE_DESCENDANTS for OTP and card-CVV fields."
+
+  # ── Backup / debuggable ───────────────────────────────────────────────
+  - id: ALLOW_BACKUP_ENABLED
+    title: "android:allowBackup not explicitly disabled"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-200
+    cvss: 4.0
+    category: STORAGE
+    description: >
+      With allowBackup=true (the default before targetSdk 31), adb backup or
+      cloud backup can copy the app's private data off the device. Apps
+      handling tokens / keys / health data should opt out unless they ship
+      a vetted BackupAgent.
+    smali_pattern: 'allowBackup.*true'
+    remediation: "Set android:allowBackup=\"false\" in AndroidManifest.xml or ship a BackupAgent that filters sensitive files."
+
+  # ── Clipboard exfil ───────────────────────────────────────────────────
+  - id: CLIPBOARD_PERSISTENT_LISTENER
+    title: "ClipboardManager.OnPrimaryClipChangedListener installed"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-359
+    cvss: 5.3
+    category: PRIVACY
+    description: >
+      A primary-clip listener fires on every copy across the whole device.
+      Required for paste-helpers but commonly abused by trojans to harvest
+      credentials and crypto wallet addresses.
+    smali_pattern: 'addPrimaryClipChangedListener'
+    remediation: "Read the clipboard only on user-initiated paste actions."
+
+  # ── WebView toggles missed by the dedicated detector ──────────────────
+  - id: WEBVIEW_SAFE_BROWSING_DISABLED
+    title: "WebView Safe Browsing turned off"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-1188
+    cvss: 5.5
+    category: WEBVIEW
+    description: >
+      WebSettings.setSafeBrowsingEnabled(false) disables Google's URL
+      reputation check. Any malicious URL that lands in the WebView will
+      load without warning.
+    smali_pattern: 'setSafeBrowsingEnabled.*const/4 v\d+, 0x0'
+    multiline: true
+    remediation: "Leave Safe Browsing enabled. If a domain truly needs to bypass it, add it to the manifest's <safe-browsing-allowlist>."
+
+  - id: WEBVIEW_GEOLOCATION_ALWAYS_GRANT
+    title: "GeolocationPermissions callback hardcoded to allow"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-862
+    cvss: 5.5
+    category: WEBVIEW
+    description: >
+      onGeolocationPermissionsShowPrompt callbacks that invoke
+      callback.invoke(origin, true, true) without consulting the user
+      hand precise location to any loaded page.
+    smali_pattern: 'onGeolocationPermissionsShowPrompt.*invoke.*const/4 v\d+, 0x1'
+    multiline: true
+    remediation: "Prompt the user before granting geolocation; respect prior denials."
+
+  # ── Network ──────────────────────────────────────────────────────────
+  - id: TLS_TRUSTALL_HOSTNAME_VERIFIER
+    title: "Custom HostnameVerifier returns true unconditionally"
+    severity: CRITICAL
+    confidence: HIGH
+    cwe: CWE-295
+    cvss: 8.6
+    category: NETWORK
+    description: >
+      A HostnameVerifier whose verify() returns true for any hostname
+      defeats the whole point of TLS — any network attacker with a CA-
+      signed cert for ANY domain can intercept the traffic.
+    smali_pattern: 'verify\(Ljava/lang/String;Ljavax/net/ssl/SSLSession;\)Z[\s\S]{0,200}const/4 v\d+, 0x1[\s\S]{0,40}return v\d+'
+    multiline: true
+    remediation: "Delete the HostnameVerifier override. Use the default HttpsURLConnection.getDefaultHostnameVerifier()."
+
+  - id: HTTP_CLEARTEXT_PERMITTED
+    title: "Network Security Config permits cleartext traffic"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-319
+    cvss: 7.4
+    category: NETWORK
+    description: >
+      cleartextTrafficPermitted="true" in the NSC opts back into HTTP for
+      the whole app or for the listed domains. From Android 9 (API 28)
+      cleartext is off by default — re-enabling it should be reserved for
+      legacy backends being actively migrated.
+    smali_pattern: 'cleartextTrafficPermitted="true"'
+    remediation: "Set cleartextTrafficPermitted=\"false\" globally and convert remaining HTTP endpoints to HTTPS."
+
+  # ── Local IPC ─────────────────────────────────────────────────────────
+  - id: LOCAL_SOCKET_BIND
+    title: "LocalSocket / LocalServerSocket bound — process-private IPC channel"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-927
+    cvss: 4.0
+    category: GENERAL
+    description: >
+      LocalSocket binds to an abstract namespace path that is reachable by
+      any other app on the device. Banking apps and password managers
+      have repeatedly leaked credentials via this channel.
+    smali_pattern: 'Landroid/net/LocalServerSocket;-><init>'
+    remediation: "Authenticate peers before accepting on the socket; prefer bound services with signature-level permissions."

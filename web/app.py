@@ -13,11 +13,13 @@ GET  /download/<scan_id> → download report.json
 
 from __future__ import annotations
 
+import collections
 import hmac
 import json
 import logging
 import os
 import queue
+import secrets
 import shutil
 import sys
 import tempfile
@@ -27,7 +29,10 @@ import uuid
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, render_template, request, send_file, stream_with_context
+from flask import (
+    Flask, Response, jsonify, make_response, render_template, request,
+    send_file, stream_with_context,
+)
 
 # Make sure the project root is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -76,6 +81,77 @@ def require_token(view):
     return wrapper
 
 
+# ── CSRF (double-submit cookie) ───────────────────────────────────────────
+# The landing page issues a per-session cookie; mutating endpoints require the
+# caller to echo it back via X-CSRF-Token. This blocks cross-origin form posts
+# without a backing session store. Set APKANALYZER_DISABLE_CSRF=1 to bypass
+# (e.g. for headless curl scripting that already authenticates via bearer
+# token — the bearer check is independently sufficient there).
+_CSRF_COOKIE = "apkanalyzer_csrf"
+_CSRF_DISABLED = os.environ.get("APKANALYZER_DISABLE_CSRF", "").strip() == "1"
+
+
+def _ensure_csrf_token() -> str:
+    """Return the request's CSRF cookie value; mint a new one if absent."""
+    tok = request.cookies.get(_CSRF_COOKIE)
+    if tok and len(tok) >= 32:
+        return tok
+    return secrets.token_urlsafe(32)
+
+
+def _csrf_check() -> bool:
+    """True if the request's X-CSRF-Token header matches the cookie value."""
+    if _CSRF_DISABLED:
+        return True
+    cookie_tok = request.cookies.get(_CSRF_COOKIE, "")
+    header_tok = request.headers.get("X-CSRF-Token", "")
+    if not cookie_tok or not header_tok:
+        return False
+    return hmac.compare_digest(cookie_tok, header_tok)
+
+
+# ── Rate limiting (in-memory token bucket per IP) ─────────────────────────
+# Lightweight per-IP request cap — avoids pulling in Flask-Limiter just for a
+# single endpoint. Set APKANALYZER_RATE_LIMIT_PER_MIN=0 to disable. State is
+# in-process so a multi-worker deployment will under-count by a factor of N
+# (acceptable for the local-tooling threat model).
+try:
+    _RATE_LIMIT_PER_MIN = int(os.environ.get("APKANALYZER_RATE_LIMIT_PER_MIN", "10"))
+except ValueError:
+    _RATE_LIMIT_PER_MIN = 10
+_RATE_LIMIT_HITS: dict[str, collections.deque] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+
+
+def _client_ip() -> str:
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",", 1)[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def _rate_limit_ok(ip: str) -> bool:
+    """Return True if the caller is under the per-minute cap."""
+    if _RATE_LIMIT_PER_MIN <= 0:
+        return True
+    now = time.time()
+    cutoff = now - 60
+    with _RATE_LIMIT_LOCK:
+        hits = _RATE_LIMIT_HITS.setdefault(ip, collections.deque())
+        while hits and hits[0] < cutoff:
+            hits.popleft()
+        if len(hits) >= _RATE_LIMIT_PER_MIN:
+            return False
+        hits.append(now)
+        # Opportunistic GC of stale keys so a long-running server doesn't
+        # accumulate one entry per ever-seen IP.
+        if len(_RATE_LIMIT_HITS) > 4096:
+            for stale_ip in list(_RATE_LIMIT_HITS):
+                if not _RATE_LIMIT_HITS[stale_ip]:
+                    del _RATE_LIMIT_HITS[stale_ip]
+        return True
+
+
 # ── Persistent scan registry (SQLite) + live in-memory state ──────────────
 # Live state (event queues, in-flight reports) can't be serialised so it
 # stays in memory. Durable state (status, error, summary counters, on-disk
@@ -115,12 +191,27 @@ def _validate_apk_upload(file_storage) -> tuple[bool, str]:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    token = _ensure_csrf_token()
+    resp = make_response(render_template("index.html", csrf_token=token))
+    # SameSite=Strict blocks the cookie from cross-site form posts entirely;
+    # together with the header echo this is a complete double-submit defence.
+    # httponly is False because the page JS needs to read the cookie to
+    # populate the X-CSRF-Token header on /scan uploads.
+    resp.set_cookie(
+        _CSRF_COOKIE, token,
+        max_age=86400, httponly=False, samesite="Strict",
+        secure=request.is_secure,
+    )
+    return resp
 
 
 @app.route("/scan", methods=["POST"])
 @require_token
 def start_scan():
+    if not _rate_limit_ok(_client_ip()):
+        return jsonify({"error": "Rate limit exceeded — try again in a minute"}), 429
+    if not _csrf_check():
+        return jsonify({"error": "Missing or invalid CSRF token"}), 403
     if "apk" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 

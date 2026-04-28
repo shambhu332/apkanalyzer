@@ -32,6 +32,23 @@ import re
 import struct
 from pathlib import Path
 
+
+# How many .so files to inspect per APK. Stack-of-ABIs apps (arm64-v8a +
+# armeabi-v7a + x86_64 + x86) routinely cross 500 entries — make the cap
+# configurable so users can crank it up for fat binaries without forking the
+# detector. Set to 0 for unlimited.
+try:
+    _MAX_SO_FILES = int(os.environ.get("APKANALYZER_MAX_SO_FILES", "500"))
+except ValueError:
+    _MAX_SO_FILES = 500
+# Per-file byte-grep cap. 64 MB covers any realistic .so; raise via env var
+# if you've genuinely got a binary larger than that and need canary detection
+# to scan the tail.
+try:
+    _MAX_SO_BYTES = int(os.environ.get("APKANALYZER_MAX_SO_BYTES", str(64 * 1024 * 1024)))
+except ValueError:
+    _MAX_SO_BYTES = 64 * 1024 * 1024
+
 from apkanalyzer.ir.models import (
     CFGMethod, MethodDescriptor, Finding, Severity, Confidence,
 )
@@ -121,11 +138,11 @@ def _read_elf_security_info(path: str) -> dict | None:
 
     # We can't reliably detect canary / TEXTREL / DT_DEBUG without parsing the
     # full dynamic section. Use cheap byte-level heuristics over the whole
-    # file (capped at 64 MB to bound memory on pathologically huge libs —
-    # the previous 4 MB cap missed canary symbols in any non-trivial .so).
+    # file (capped to bound memory on pathologically huge libs — the cap is
+    # tunable via APKANALYZER_MAX_SO_BYTES; default 64 MB).
     try:
         size = os.path.getsize(path)
-        cap = min(size, 64 * 1024 * 1024)
+        cap = size if _MAX_SO_BYTES <= 0 else min(size, _MAX_SO_BYTES)
         with open(path, "rb") as fh:
             full = fh.read(cap)
     except OSError:
@@ -193,15 +210,15 @@ class NativeDetector:
             return findings
 
         scanned = 0
-        # Bound work, but the old 80-file limit silently dropped most libraries
-        # in ABIs-stacked apps. 500 covers any realistic app while still
-        # capping pathological cases (e.g. test fixtures with thousands of .so).
+        # File count cap is tunable via APKANALYZER_MAX_SO_FILES (default 500,
+        # set to 0 for unlimited). Stacked-ABI apps regularly cross 500.
         for so in lib_root.rglob("*.so"):
             scanned += 1
-            if scanned > 500:
+            if 0 < _MAX_SO_FILES < scanned:
                 logger.warning(
-                    "native_detector: stopped after 500 .so files; "
-                    "remaining libraries in %s were not analysed", lib_root,
+                    "native_detector: stopped after %d .so files (cap "
+                    "APKANALYZER_MAX_SO_FILES); remaining libraries in %s "
+                    "were not analysed", _MAX_SO_FILES, lib_root,
                 )
                 break
             info = _read_elf_security_info(str(so))

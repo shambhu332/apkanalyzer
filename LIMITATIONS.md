@@ -5,11 +5,13 @@ It is kept in sync with the code: items that get fixed are removed (not
 crossed out), so anything still listed is still missing.
 
 The architecture is solid — inter-procedural Kildall taint with method-summary
-path replay, field-tagged `iput`/`iget`, static-field tracking, CHA-augmented
-virtual dispatch, MASVS profile gating, CVSS/OWASP enrichment, SARIF baselining,
-and an AST-sandboxed plugin loader puts APKAnalyzer ahead of pattern-matching
-tools like MobSF/QARK in raw analysis quality. The remaining gaps below are
-what blocks the "better than MobSF on coverage" claim.
+path replay, field-tagged `iput`/`iget`, container-element propagation
+(`aput`/`aget`/`Map.put`/`List.add`/`Bundle.put`), tri-state sanitiser
+neutralisation, static-field tracking, CHA-augmented virtual dispatch, MASVS
+profile gating, CVSS/OWASP enrichment, SARIF baselining, and an AST-sandboxed
+plugin loader puts APKAnalyzer ahead of pattern-matching tools like
+MobSF/QARK in raw analysis quality. The remaining gaps below are what blocks
+the "better than MobSF on coverage" claim.
 
 ---
 
@@ -19,21 +21,18 @@ what blocks the "better than MobSF on coverage" claim.
 |----|-----|------|---------------------------|
 | 1  | **Context-insensitivity (k=0)** — every callee is summarized once, keyed by `desc.full_name`; all callers share the same summary | `analysis/taint/engine.py` `_method_summaries` | A method called from a sanitized path *and* an unsanitized path will conflate them. False positives in DI-heavy Kotlin apps. FlowDroid uses k-CFA / object-sensitive contexts. |
 | 2  | **Bounded worklist (`len(blocks)*10 + 100`)** silently truncates on convergence-resistant CFGs | `engine.py` | Big methods (Kotlin coroutines, generated parsers) just stop being analyzed mid-flight. Truncation is logged but findings are silently partial. |
-| 3  | **Field sensitivity is shallow** — only one level: `iput` stamps `LABEL@field`, but two-level chains (`a.b.c = tainted`) don't model nested access paths | `engine.py` `iput`/`iget` blocks | Nested struct-style data loses taint on the second hop. |
-| 4  | **No array element / map / list element tracking** — `aput`/`aget`/`Map.put`/`List.add` are not modeled | `engine.py` | `intent.getStringExtra("a")` taints the result, but `bundle.getString(key)` after `for (k : keys)` loses provenance. Container-routed flows are invisible. |
-| 5  | **No reflection resolution** — `Class.forName(s).getMethod(m).invoke(...)` is just an obfuscation finding, not edge-augmenting | `obfuscation_detector.py` only flags it | Apex/DroidRA-style reflection resolution would let you trace through reflective dispatch. Without it, any obfuscated app is opaque. |
-| 6  | **No string deobfuscation** — encrypted/decoded URLs and constants in `decrypt(byteArray)` patterns aren't unwrapped | nothing handles it | Modern packers (Bangcle, Tencent Legu, dex-protector, custom Base64+XOR) defeat secret/network/URL detectors entirely. |
-| 7  | **No native taint** — JNI boundary is a black hole | `native_detector.py` only checks ELF flags | A `Java_com_app_Foo_decrypt` reading from a tainted source then returning to Java loses all provenance. JN-SAF / NDroid bridge this. |
-| 8  | **Intra-block-only constant propagation** in WebView/intent detectors | `webview_detector.py` `bool_regs`/`int_regs` | `setJavaScriptEnabled(getConfigBool())` is invisible. State-of-the-art needs SSA-form const propagation or at least worklist over the CFG. |
-| 9  | **Sanitizer model is binary** — `is_neutralized` is True/False; no notion of partial neutralisation beyond the explicit `neutralizes` set | `engine.py:679-682` | Multi-step sanitisation chains aren't modeled. |
-| 10 | **Source/sink catalogue is still smaller than SuSi** — ships ~120 sources / ~80 sinks / ~15 sanitizers across modern Android stacks (Kotlin Flow/StateFlow, RxJava2, LiveData, DataStore, Compose, Volley, Apollo, Ktor, Bouncy Castle, Jsoup) | `sources.py`, `sinks.py`, `sanitizers.py` | FlowDroid ships ~12k SuSi-derived definitions. Coverage is good but not exhaustive. |
+| 3  | **Field sensitivity is shallow** — only one level: `iput` stamps `LABEL@field`, but two-level chains (`a.b.c = tainted`) don't model nested access paths | `engine.py` `iput`/`iget` blocks | Nested struct-style data loses taint on the second hop. Container-element tracking has the same one-level limit (`LABEL@__elem__`). |
+| 4  | **No reflection resolution** — `Class.forName(s).getMethod(m).invoke(...)` is just an obfuscation finding, not edge-augmenting | `obfuscation_detector.py` only flags it | Apex/DroidRA-style reflection resolution would let you trace through reflective dispatch. Without it, any obfuscated app is opaque. |
+| 5  | **No string deobfuscation** — encrypted/decoded URLs and constants in `decrypt(byteArray)` patterns aren't unwrapped | nothing handles it | Modern packers (Bangcle, Tencent Legu, dex-protector, custom Base64+XOR) defeat secret/network/URL detectors entirely. |
+| 6  | **No native taint** — JNI boundary is a black hole | `native_detector.py` only checks ELF flags | A `Java_com_app_Foo_decrypt` reading from a tainted source then returning to Java loses all provenance. JN-SAF / NDroid bridge this. |
+| 7  | **Intra-block-only constant propagation** in WebView/intent detectors | `webview_detector.py` `bool_regs`/`int_regs` | `setJavaScriptEnabled(getConfigBool())` is invisible. State-of-the-art needs SSA-form const propagation or at least worklist over the CFG. |
+| 8  | **Source/sink catalogue is still smaller than SuSi** — ships ~130 sources / ~100 sinks / ~20 sanitizers across modern Android stacks (Kotlin Flow/StateFlow, RxJava2, LiveData, DataStore, Compose, Volley, Apollo, Ktor, Bouncy Castle, Jsoup) | `sources.py`, `sinks.py`, `sanitizers.py` | FlowDroid ships ~12k SuSi-derived definitions. Coverage is good but not exhaustive. |
 
 ---
 
 ## 2. Detector blind spots
 
 - **`crypto_detector.py`** can't follow algorithm strings across method boundaries; key-size detection requires the algo string to be in the same method as the keygen. Misses any factory-style cipher builder.
-- **No detection of**: SafetyNet replay attacks, Play Integrity API result-not-validated-server-side, deprecated `signedConfig`, Auto-fill data-leak in `IMPORTANT_FOR_AUTOFILL`, Accessibility Service abuse, MediaProjection screen-cap, OverlayManager / `SYSTEM_ALERT_WINDOW`, Notification listener abuse, biometric `setUserAuthenticationRequired(false)`, KeyChain credential exposure, ContentResolver `query()` SQLi (you flag execSQL but not the more common pattern).
 - **No JADX-style decompilation** — your bytecode IR can't recover lambdas/coroutine state machines cleanly. MobSF cheats by shelling out to JADX; you don't.
 - **No AAB (Android App Bundle) support** — modern Play Store distribution is bundles. APKs are increasingly rare for first-party analysis.
 - **No XAPK / split-APK / dynamic feature module support** — base.apk + N split apks aren't merged before analysis.
@@ -43,15 +42,14 @@ what blocks the "better than MobSF on coverage" claim.
 ## 3. Rule engine gaps
 
 - Smali patterns now support multi-line matching when the rule sets `multiline: true`, but there is still no way to express data-flow rules in YAML (Semgrep can, via `pattern-source`/`pattern-sink`).
-- Rule-pack content is light: ~5 YAML files, ~600 lines total. Snyk Code, MobSF, Semgrep all ship hundreds of built-in rules.
+- Rule-pack content has grown to **6 YAML files / ~900 lines / 61 rules** (covering attestation, accessibility/overlay abuse, biometric weak-auth, KeyChain exposure, ContentResolver SQLi, autofill leak, clipboard exfil, WebView Safe-Browsing/geolocation toggles, TLS trust-all and cleartext NSC), but Snyk Code, MobSF and Semgrep still ship hundreds more.
 
 ---
 
 ## 4. Operational / production gaps
 
-- **Web app**: ZIP magic check + optional bearer token + ScanStore-backed history are in place, but still **no CSRF token** on POST and **no rate limit**.
 - **SQLite cache is single-machine** — no Redis/Postgres, no team sharing.
-- **Native `.so` cap of 500 files**, byte-grep up to 64 MB per file — both are footguns: bigger apps with stacked ABIs (arm64-v8a + armeabi-v7a + x86_64 + x86) easily pass 500.
+- **Native `.so` defaults**: 500-file cap and 64 MB byte-grep are now overridable via `APKANALYZER_MAX_SO_FILES` / `APKANALYZER_MAX_SO_BYTES`, but the defaults still surprise users with stacked-ABI fat binaries.
 - **No incremental detector cache** — only the full-report cache. Change one rule and you re-scan the world.
 - **No CI integration helpers** — no GitHub Action, no GitLab template, no exit-code matrix beyond `--fail-on` / `--fail-on-new`.
 
@@ -70,6 +68,7 @@ what blocks the "better than MobSF on coverage" claim.
 | **Multi-tenant API + OpenAPI spec** | yes | no | no | no | no |
 | **Diff/delta scan UI** | partial | no | no | no | **yes** — `diff_reporter.py` is good |
 | **Inter-procedural taint** | no | no | no | no | **yes** — your competitive moat |
+| **Container-aware taint** (Map/List/Bundle/array element) | no | no | no | no | **yes** — `LABEL@__elem__` propagation |
 | **Per-finding CVSS + OWASP map** | partial | no | no | no | **yes** — really good here |
 | **SARIF baseline (`baselineState`)** | no | no | no | no | **yes** — `--baseline` flows into SARIF results |
 | **CHA-augmented virtual dispatch** | no | no | no | no | **yes** |
@@ -96,7 +95,7 @@ SBOM), and rule-pack content.
 6. **String deobfuscation**: detect common XOR/Base64/RC4 wrapper patterns at the AST level and emulate them with a tiny Smali interpreter on constant inputs.
 7. **JNI taint bridging**: parse JNI signatures from `RegisterNatives` and bound native blackboxes with summary specs (loaded from a YAML bestiary).
 8. **Object/access-path-sensitive taint** (k=1 minimum) — closes the FP gap with FlowDroid.
-9. **Rule pack ecosystem**: ship 200+ YAML rules out of the box (mine MobSF + Semgrep mobile rules), add Semgrep-style data-flow patterns.
+9. **Rule pack ecosystem**: grow from 61 → 200+ YAML rules (mine MobSF + Semgrep mobile rules), add Semgrep-style data-flow patterns.
 10. **Per-finding triage UX**: web UI with "mark as FP", "suppress this rule for this class", baseline export → CI diff. This is where teams actually live.
 11. **Multi-tenant API** with API keys, scan queue (Celery + Redis), Postgres backing, OpenAPI spec — replace the in-memory `_scans` dict.
 12. **Frida runner**, not just generator: drive an emulator, replay your hooks, surface dynamic confirmations on the same finding.

@@ -58,3 +58,7 @@ uploads/
 output/
 decoded/
 *.apk
+
+# Web app runtime data
+web/scan_store.db
+web/static/reports/

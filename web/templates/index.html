@@ -938,7 +938,9 @@ async function startScan() {
   document.getElementById("progress-view").classList.add("show");
 
   try {
-    const res = await fetch("/scan", { method: "POST", body: fd });
+    const csrfMatch = document.cookie.match(/(?:^|;\s*)apkanalyzer_csrf=([^;]+)/);
+    const headers = csrfMatch ? { "X-CSRF-Token": decodeURIComponent(csrfMatch[1]) } : {};
+    const res = await fetch("/scan", { method: "POST", headers, body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Upload failed");
     STATE.scanId = data.scan_id;

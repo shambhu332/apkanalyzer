@@ -52,6 +52,15 @@ Inter-procedural details
   composite labels of the form `LABEL@field` so subsequent iget reads of the
   same field name recover the original taint without polluting unrelated
   fields.
+- Container-element tracking: aput / Map.put / List.add / Set.add / Bundle.put
+  stamp the receiver register with `LABEL@__elem__` composite labels; aget /
+  Map.get / List.get / Iterator.next / Bundle.getString recover the original
+  source label by stripping the suffix. Reuses the same machinery as field
+  sensitivity rather than building a parallel container model.
+- Sanitiser confidence is tri-state: "full" (a sanitizer covers this sink —
+  finding silenced to LOW), "partial" (a sanitizer ran but doesn't cover the
+  sink, e.g. Base64 before NETWORK_OUT — finding emitted at MEDIUM), "none"
+  (no sanitizer — full source/chain heuristic confidence).
 """
 
 from __future__ import annotations
@@ -86,11 +95,43 @@ _RESULT_REG = "__result__"
 _RETURN_REG = "__return__"
 # Separator for field-sensitive composite labels: BASE_LABEL + FIELD_SEP + field_name
 _FIELD_SEP = "@"
+# Synthetic field name used to tag collection / array element taint. A list
+# whose elements carry DEVICE_ID is stamped with `DEVICE_ID@__elem__` on the
+# receiver register; aget / Map.get / Iterator.next strip the suffix to recover
+# the original source label. Reuses the iput/iget machinery rather than
+# inventing a parallel container model.
+_ELEM_KEY = "__elem__"
 # Class Hierarchy Analysis cap: when a virtual/interface call resolves to many
 # possible targets, analysing all of them is exponential. Eight is enough for
 # OkHttp Interceptor / Volley Response.Listener / RxJava Observer style fan-out
 # without blowing up on Iterable.iterator() or similar universal interfaces.
 _CHA_MAX_TARGETS = 4
+
+# Method-name fragments (matched against the raw invoke instruction) that move
+# data INTO a container — argument taint flows to the receiver as element-tagged
+# composite labels. Receiver is always arg_regs[0] for these virtual calls.
+_COLL_WRITE_PATTERNS = (
+    "Map;->put", "Map;->putAll",
+    "HashMap;->put", "ConcurrentHashMap;->put", "LinkedHashMap;->put",
+    "ArrayMap;->put", "TreeMap;->put",
+    "Collection;->add", "Collection;->addAll",
+    "List;->add", "ArrayList;->add", "LinkedList;->add",
+    "Set;->add", "HashSet;->add", "LinkedHashSet;->add", "TreeSet;->add",
+    "Bundle;->put",  # Bundle.putString/putInt/putParcelable/...
+)
+# Method-name fragments that move data OUT of a container — receiver's element
+# taint flows to the result register (consumed by the next move-result).
+_COLL_READ_PATTERNS = (
+    "Map;->get", "Map;->getOrDefault", "Map;->values", "Map;->keySet",
+    "Map;->entrySet",
+    "HashMap;->get", "ConcurrentHashMap;->get", "LinkedHashMap;->get",
+    "ArrayMap;->get", "TreeMap;->get",
+    "List;->get", "ArrayList;->get", "LinkedList;->get",
+    "Collection;->iterator", "List;->iterator", "Set;->iterator",
+    "Iterable;->iterator",
+    "Iterator;->next",
+    "Bundle;->get",  # getString / getInt / getParcelable / ...
+)
 
 from apkanalyzer.utils.test_class import is_test_class as _is_test_class
 
@@ -252,7 +293,7 @@ class MethodSummary:
     __slots__ = ("exit_state", "paths")
 
     def __init__(self, exit_state: MethodTaintState,
-                 paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], bool]]) -> None:
+                 paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], str]]) -> None:
         self.exit_state = exit_state
         # Defensive copy so callers can't mutate the cached list.
         self.paths = list(paths)
@@ -337,8 +378,8 @@ class TaintEngine:
                 continue
 
             paths = self._analyse_method(desc, depth=0, visited=set())
-            for src, snk, chain, neutralized in paths:
-                findings.append(self._make_finding(src, snk, chain, neutralized))
+            for src, snk, chain, neutralization in paths:
+                findings.append(self._make_finding(src, snk, chain, neutralization))
 
         if self._truncated_methods:
             logger.warning(
@@ -394,11 +435,12 @@ class TaintEngine:
         depth: int,
         visited: set[str],
         initial_state: Optional[MethodTaintState] = None,
-    ) -> list[tuple[TaintSource, TaintSink, list[MethodDescriptor], bool]]:
+    ) -> list[tuple[TaintSource, TaintSink, list[MethodDescriptor], str]]:
         """
         Run the worklist dataflow algorithm on a single method's CFG.
 
-        Returns list of (source, sink, call_chain, is_neutralized) tuples.
+        Returns list of (source, sink, call_chain, neutralization) tuples,
+        where neutralization is "none" / "partial" / "full".
         """
         if depth > self.max_depth:
             return []
@@ -426,7 +468,7 @@ class TaintEngine:
         if cfg.entry_block:
             worklist.append(cfg.entry_block)
 
-        found_paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], bool]] = []
+        found_paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], str]] = []
         # Per-method record of return-register taint observed at any return-*
         # opcode. Merged into the summary's __return__ slot so callers see it.
         return_taint: set[str] = set()
@@ -489,8 +531,8 @@ class TaintEngine:
 
         Returns (out_state, local_paths, callee_paths, return_taint).
         """
-        local_paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], bool]] = []
-        callee_paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], bool]] = []
+        local_paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], str]] = []
+        callee_paths: list[tuple[TaintSource, TaintSink, list[MethodDescriptor], str]] = []
         return_taint: set[str] = set()
 
         last_invoke_taint: set[str] = set()
@@ -594,6 +636,40 @@ class TaintEngine:
                         state.taint(obj_reg, composite)
                 continue
 
+            # ── Array element writes (aput / aput-object / aput-*) ────
+            # Mirrors iput: tag the array register with element-suffixed
+            # composite labels so a later aget can recover the source.
+            if mnemonic.startswith("aput"):
+                operands = instr.get("operands", [])
+                if len(operands) >= 2:
+                    src_reg = str(operands[0].get("value", ""))
+                    arr_reg = str(operands[1].get("value", ""))
+                    src_taint = state.get_taint(src_reg)
+                    if src_taint:
+                        composite = {
+                            f"{lbl}{_FIELD_SEP}{_ELEM_KEY}" for lbl in src_taint
+                            if _FIELD_SEP not in lbl
+                        }
+                        state.taint(arr_reg, composite)
+                continue
+
+            # ── Array element reads (aget / aget-object / aget-*) ─────
+            if mnemonic.startswith("aget"):
+                operands = instr.get("operands", [])
+                if len(operands) >= 2:
+                    dst_reg = str(operands[0].get("value", ""))
+                    arr_reg = str(operands[1].get("value", ""))
+                    arr_taint = state.get_taint(arr_reg)
+                    if arr_taint:
+                        elem_suffix = f"{_FIELD_SEP}{_ELEM_KEY}"
+                        propagated = {
+                            lbl[: -len(elem_suffix)] for lbl in arr_taint
+                            if lbl.endswith(elem_suffix)
+                        }
+                        bare = {lbl for lbl in arr_taint if _FIELD_SEP not in lbl}
+                        state.taint(dst_reg, propagated | bare)
+                continue
+
             # ── StringBuilder/StringBuffer append (string concat) ──
             if "StringBuilder;->append" in raw or "StringBuffer;->append" in raw:
                 parts_sb = _extract_invoke_parts(instr)
@@ -647,6 +723,49 @@ class TaintEngine:
                             state.sanitize(reg, san_spec.label)
                     state.sanitize(_RESULT_REG, san_spec.label)
 
+            # ── Collection element propagation ────────────────────────
+            # Map/List/Set/Bundle are modelled as containers whose elements
+            # carry a synthetic LABEL@__elem__ taint, mirroring iput/iget
+            # for instance fields. Receiver is arg_regs[0] for invoke-virtual
+            # / invoke-interface; static collection helpers are out of scope.
+            if arg_regs and any(p in raw for p in _COLL_WRITE_PATTERNS):
+                receiver = arg_regs[0]
+                elem_taint: set[str] = set()
+                for arg_reg in arg_regs[1:]:
+                    elem_taint |= state.get_taint(arg_reg)
+                if elem_taint:
+                    composite = {
+                        f"{lbl}{_FIELD_SEP}{_ELEM_KEY}" for lbl in elem_taint
+                        if _FIELD_SEP not in lbl
+                    }
+                    state.taint(receiver, composite)
+                    for lbl in elem_taint:
+                        base = lbl.split(_FIELD_SEP, 1)[0]
+                        src_obj = state.get_source(base) or state.get_source(lbl)
+                        if src_obj is not None:
+                            state.record_source(f"{base}{_FIELD_SEP}{_ELEM_KEY}", src_obj)
+            if arg_regs and any(p in raw for p in _COLL_READ_PATTERNS):
+                receiver = arg_regs[0]
+                recv_taint = state.get_taint(receiver)
+                if recv_taint:
+                    elem_suffix = f"{_FIELD_SEP}{_ELEM_KEY}"
+                    propagated = {
+                        lbl[: -len(elem_suffix)] for lbl in recv_taint
+                        if lbl.endswith(elem_suffix)
+                    }
+                    bare = {lbl for lbl in recv_taint if _FIELD_SEP not in lbl}
+                    yielded = propagated | bare
+                    if yielded:
+                        last_invoke_taint = last_invoke_taint | yielded
+                        for lbl in yielded:
+                            src_obj = state.get_source(lbl)
+                            if src_obj is None:
+                                src_obj = state.get_source(
+                                    f"{lbl}{_FIELD_SEP}{_ELEM_KEY}"
+                                )
+                            if src_obj is not None:
+                                state.record_source(lbl, src_obj)
+
             # Sink rules
             for spec in self.sink_index.get(class_name, []):
                 if spec.method_pattern not in (method_name, "*"):
@@ -661,11 +780,22 @@ class TaintEngine:
                 if not taint_labels:
                     continue
                 applied_sans = state.get_sanitizers(target_reg)
-                # O(1) neutralisation check via precomputed map
-                is_neutralized = any(
+                # Tri-state neutralisation: "full" means at least one applied
+                # sanitizer covers this sink (silences the finding); "partial"
+                # means a sanitizer ran but doesn't cover this sink (e.g.
+                # Base64 encoding before NETWORK_OUT — developer thought it
+                # was protective, downgrade rather than suppress); "none"
+                # means no sanitizer at all on this register.
+                covers = any(
                     spec.label in self._sanitizer_neutralizes.get(san_label, set())
                     for san_label in applied_sans
                 )
+                if covers:
+                    neutralization = "full"
+                elif applied_sans:
+                    neutralization = "partial"
+                else:
+                    neutralization = "none"
                 snk_obj = TaintSink(
                     method=current_method,
                     block_id=block.block_id,
@@ -684,7 +814,7 @@ class TaintEngine:
                     src_obj = state.get_source(base) or state.get_source(label)
                     if src_obj is not None:
                         local_paths.append(
-                            (src_obj, snk_obj, [current_method], is_neutralized)
+                            (src_obj, snk_obj, [current_method], neutralization)
                         )
 
             # Inline callee analysis (inter-procedural)
@@ -721,9 +851,9 @@ class TaintEngine:
                         # Recursive / mutually-recursive: replay cached paths
                         cached = self._method_summaries.get(tgt_desc.full_name)
                         if cached:
-                            for src, snk, chain, neutralized in cached.paths:
+                            for src, snk, chain, neutralization in cached.paths:
                                 callee_paths.append(
-                                    (src, snk, [current_method] + chain, neutralized)
+                                    (src, snk, [current_method] + chain, neutralization)
                                 )
                             ret = cached.exit_state.regs.get(_RETURN_REG)
                             if ret:
@@ -744,9 +874,9 @@ class TaintEngine:
                         sub_paths = self._analyse_method(
                             tgt_desc, depth + 1, visited, callee_init
                         )
-                        for src, snk, chain, neutralized in sub_paths:
+                        for src, snk, chain, neutralization in sub_paths:
                             callee_paths.append(
-                                (src, snk, [current_method] + chain, neutralized)
+                                (src, snk, [current_method] + chain, neutralization)
                             )
 
                         # Propagate callee return taint back into caller —
@@ -796,7 +926,7 @@ class TaintEngine:
         src: TaintSource,
         snk: TaintSink,
         chain: list[MethodDescriptor],
-        sanitized: bool = False,
+        neutralization: str = "none",
     ) -> Finding:
         taint_path = TaintPath(source=src, sink=snk, call_chain=chain)
 
@@ -808,8 +938,15 @@ class TaintEngine:
         effective_sink_label = _privacy_sink_label(src.label, snk.label)
 
         severity = _severity_for_labels(src.label, effective_sink_label)
-        if sanitized:
+        # Tri-state confidence: "full" means a sanitizer fully covers the
+        # sink; "partial" means a sanitizer ran but doesn't actually cover
+        # this sink type (e.g. Base64 before NETWORK_OUT — surfaces the
+        # developer's intent without suppressing the finding); "none" falls
+        # through to the source/sink/chain heuristic.
+        if neutralization == "full":
             confidence = Confidence.LOW
+        elif neutralization == "partial":
+            confidence = Confidence.MEDIUM
         else:
             confidence = _confidence_for_flow(src.label, effective_sink_label, len(chain))
 
