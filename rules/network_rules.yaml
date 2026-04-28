@@ -1,0 +1,117 @@
+rules:
+  - id: NETWORK_ALLOW_ALL_HOSTNAME
+    title: "ALLOW_ALL_HOSTNAME_VERIFIER disables TLS hostname check"
+    severity: CRITICAL
+    confidence: HIGH
+    cwe: CWE-297
+    cvss: 9.1
+    category: NETWORK
+    description: >
+      Setting ALLOW_ALL_HOSTNAME_VERIFIER allows connections to any host regardless
+      of certificate hostname mismatch, enabling trivial MITM.
+    smali_pattern: 'ALLOW_ALL_HOSTNAME_VERIFIER'
+    remediation: "Use the default HostnameVerifier or implement strict custom verification."
+
+  - id: NETWORK_EMPTY_TRUSTMANAGER
+    title: "Empty X509TrustManager.checkServerTrusted — accepts any certificate"
+    severity: CRITICAL
+    confidence: MEDIUM
+    cwe: CWE-295
+    cvss: 9.1
+    category: NETWORK
+    description: >
+      A custom TrustManager with no validation in checkServerTrusted accepts any
+      certificate, including expired, self-signed, or forged ones.
+    smali_pattern: 'checkServerTrusted'
+    remediation: "Delegate to the default TrustManagerFactory for proper validation."
+
+  - id: NETWORK_SSLV3
+    title: "SSLv3 protocol explicitly requested"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-326
+    cvss: 7.4
+    category: NETWORK
+    description: >
+      SSLv3 is vulnerable to POODLE and has been prohibited by RFC 7568 (2015).
+    smali_pattern: 'SSLContext;->getInstance.*"SSLv3"'
+    remediation: 'Use SSLContext.getInstance("TLSv1.3").'
+
+  - id: NETWORK_HTTP_URL
+    title: "Hardcoded http:// URL"
+    severity: MEDIUM
+    confidence: HIGH
+    cwe: CWE-319
+    cvss: 6.5
+    category: NETWORK
+    description: >
+      Hardcoded HTTP URLs transmit data without TLS encryption, exposing it
+      to passive eavesdropping and active MITM.
+    smali_pattern: '"http://'
+    remediation: "Replace all http:// URLs with https:// endpoints."
+
+  - id: NETWORK_TLS10_TLS11_REQUEST
+    title: "Deprecated TLS 1.0 / 1.1 explicitly requested"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-326
+    cvss: 7.4
+    category: NETWORK
+    description: >
+      RFC 8996 (March 2021) deprecates TLS 1.0 and 1.1; both are vulnerable
+      to BEAST/POODLE-class attacks and lack modern AEAD ciphers.
+    smali_pattern: 'SSLContext;->getInstance.*"TLSv1(\.[01])?"'
+    remediation: 'Use SSLContext.getInstance("TLSv1.2") or "TLSv1.3".'
+
+  - id: NETWORK_OKHTTP_DEFAULT_HOSTNAME_VERIFIER
+    title: "OkHttp configured with HostnameVerifier that always returns true"
+    severity: CRITICAL
+    confidence: MEDIUM
+    cwe: CWE-297
+    cvss: 9.1
+    category: NETWORK
+    description: >
+      Setting OkHttpClient.hostnameVerifier with a verifier that returns true
+      for all hosts disables certificate-hostname matching entirely.
+    smali_pattern: 'OkHttpClient\$Builder;->hostnameVerifier'
+    remediation: "Use OkHostnameVerifier.INSTANCE (the default) or restrict to your domain."
+
+  - id: NETWORK_DISABLE_CERT_PINNING
+    title: "Certificate pinning explicitly disabled"
+    severity: HIGH
+    confidence: LOW
+    cwe: CWE-295
+    cvss: 6.5
+    category: NETWORK
+    description: >
+      A CertificatePinner.Builder().build() with no pins, or an empty
+      network-security-config <pin-set>, makes pinning a no-op.
+    smali_pattern: 'CertificatePinner\$Builder;->build'
+    remediation: "Add CertificatePinner.Builder().add(host, sha256Pin)... or remove the builder if pinning is not intended."
+
+  - id: NETWORK_HTTP_RETROFIT_BASE_URL
+    title: "Retrofit baseUrl uses cleartext HTTP"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-319
+    cvss: 7.5
+    category: NETWORK
+    description: >
+      Retrofit.Builder().baseUrl("http://...") forces all derived API calls
+      over cleartext, regardless of the manifest's usesCleartextTraffic flag.
+    smali_pattern: 'Retrofit\$Builder;->baseUrl.*"http://'
+    remediation: 'Switch to https:// and ensure the certificate chain is valid.'
+
+  - id: NETWORK_NSC_USER_TRUST
+    title: "Network Security Config trusts user-installed CAs"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-295
+    cvss: 7.5
+    category: NETWORK
+    description: >
+      <certificates src="user"/> in network-security-config.xml allows MITM
+      proxies installed by the user (or by malware with admin) to intercept
+      traffic without warning.
+    smali_pattern: '<certificates src="user"'
+    remediation: 'Remove src="user"; trust only src="system" CAs in production builds.'

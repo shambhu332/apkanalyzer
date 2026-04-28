@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APKAnalyzer Report — com.meesho.supply</title>
+<style>
+  :root {
+    --critical: #d63031; --high: #e17055; --medium: #fdcb6e;
+    --low: #00b894; --info: #74b9ff;
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 'Segoe UI', system-ui, sans-serif; }
+  a { color: #58a6ff; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 32px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .badge { border-radius: 8px; padding: 16px; text-align: center; border: 1px solid var(--border); }
+  .badge .count { font-size: 32px; font-weight: 700; }
+  .badge .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 4px; }
+  .badge.CRITICAL { border-color: var(--critical); color: var(--critical); }
+  .badge.HIGH { border-color: var(--high); color: var(--high); }
+  .badge.MEDIUM { border-color: var(--medium); color: var(--medium); }
+  .badge.LOW { border-color: var(--low); color: var(--low); }
+  .badge.TOTAL { border-color: var(--border); color: var(--text); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border);
+                background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
+  .filter-btn.active, .filter-btn:hover { background: var(--border); color: var(--text); }
+  .finding { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+             margin-bottom: 12px; overflow: hidden; }
+  .finding-header { padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+                    cursor: pointer; user-select: none; }
+  .finding-header:hover { background: rgba(255,255,255,0.03); }
+  .sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+         text-transform: uppercase; letter-spacing: .05em; min-width: 70px; text-align: center; }
+  .sev.CRITICAL { background: var(--critical); color: #fff; }
+  .sev.HIGH { background: var(--high); color: #fff; }
+  .sev.MEDIUM { background: var(--medium); color: #000; }
+  .sev.LOW { background: var(--low); color: #fff; }
+  .conf { font-size: 11px; color: var(--muted); }
+  .finding-title { flex: 1; font-weight: 500; }
+  .finding-body { padding: 16px; border-top: 1px solid var(--border); display: none; }
+  .finding-body.open { display: block; }
+  .finding-body .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field-label { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  pre { background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 10px;
+        font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .flow { font-size: 12px; color: var(--muted); }
+  .flow span { color: var(--text); }
+  .remediation { background: rgba(0,184,148,0.1); border: 1px solid var(--low);
+                 border-radius: 4px; padding: 10px; font-size: 13px; }
+  .perms { display: flex; flex-wrap: wrap; gap: 6px; }
+  .perm { font-size: 11px; background: var(--border); padding: 2px 8px; border-radius: 4px; }
+  .perm.danger { background: rgba(214,48,49,0.2); color: var(--critical); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>APKAnalyzer Security Report</h1>
+  <div class="meta">
+    Package: <strong>com.meesho.supply</strong> &nbsp;|&nbsp;
+    Target SDK: 35 &nbsp;|&nbsp;
+    Min SDK: 21 &nbsp;|&nbsp;
+    Analysis: 69.02s
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Summary badges -->
+  <div class="summary-grid">
+    <div class="badge TOTAL"><div class="count">23</div><div class="label">Total</div></div>
+    
+    <div class="badge CRITICAL">
+      <div class="count">0</div>
+      <div class="label">CRITICAL</div>
+    </div>
+    
+    <div class="badge HIGH">
+      <div class="count">0</div>
+      <div class="label">HIGH</div>
+    </div>
+    
+    <div class="badge MEDIUM">
+      <div class="count">23</div>
+      <div class="label">MEDIUM</div>
+    </div>
+    
+    <div class="badge LOW">
+      <div class="count">0</div>
+      <div class="label">LOW</div>
+    </div>
+    
+  </div>
+
+  <!-- Permissions -->
+  
+  <div style="margin-bottom:24px;">
+    <div class="field-label" style="margin-bottom:8px;">Dangerous Permissions</div>
+    <div class="perms">
+      
+      <span class="perm danger">android.permission.READ_SMS</span>
+      
+      <span class="perm danger">android.permission.WRITE_CONTACTS</span>
+      
+      <span class="perm danger">android.permission.SEND_SMS</span>
+      
+      <span class="perm danger">android.permission.ACCESS_FINE_LOCATION</span>
+      
+      <span class="perm danger">android.permission.WRITE_EXTERNAL_STORAGE</span>
+      
+      <span class="perm danger">android.permission.READ_EXTERNAL_STORAGE</span>
+      
+      <span class="perm danger">android.permission.READ_CONTACTS</span>
+      
+      <span class="perm danger">android.permission.READ_PHONE_STATE</span>
+      
+      <span class="perm danger">android.permission.RECORD_AUDIO</span>
+      
+      <span class="perm danger">android.permission.ACCESS_COARSE_LOCATION</span>
+      
+      
+      
+      <span class="perm">com.google.android.c2dm.permission.RECEIVE</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.DETECT_SCREEN_CAPTURE</span>
+      
+      
+      
+      
+      
+      <span class="perm">com.google.android.gms.permission.AD_ID</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_TOPICS</span>
+      
+      
+      
+      <span class="perm">android.permission.VIBRATE</span>
+      
+      
+      
+      <span class="perm">com.truecaller.permission.sdk.internal.read_account_state</span>
+      
+      
+      
+      <span class="perm">android.permission.FOREGROUND_SERVICE_DATA_SYNC</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.SCHEDULE_EXACT_ALARM</span>
+      
+      
+      
+      <span class="perm">android.permission.BLUETOOTH</span>
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_NETWORK_STATE</span>
+      
+      
+      
+      <span class="perm">android.permission.WAKE_LOCK</span>
+      
+      
+      
+      <span class="perm">android.permission.CHANGE_NETWORK_STATE</span>
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_WIFI_STATE</span>
+      
+      
+      
+      <span class="perm">android.permission.REQUEST_FOREGROUND_SERVICE</span>
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_AD_ID</span>
+      
+      
+      
+      
+      
+      <span class="perm">com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE</span>
+      
+      
+      
+      <span class="perm">android.permission.INTERNET</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.READ_BASIC_PHONE_STATE</span>
+      
+      
+      
+      <span class="perm">com.huawei.appmarket.service.commondata.permission.GET_COMMON_DATA</span>
+      
+      
+      
+      <span class="perm">android.permission.RECEIVE_BOOT_COMPLETED</span>
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_ATTRIBUTION</span>
+      
+      
+      
+      <span class="perm">com.samsung.android.mapsagent.permission.READ_APP_INFO</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.FOREGROUND_SERVICE</span>
+      
+      
+      
+      <span class="perm">android.permission.MODIFY_AUDIO_SETTINGS</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.AUDIO_CAPTURE</span>
+      
+      
+      
+      
+      
+      <span class="perm">com.meesho.supply.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION</span>
+      
+      
+      
+      <span class="perm">android.permission.READ_PHONE_NUMBERS</span>
+      
+      
+      
+      <span class="perm">android.permission.POST_NOTIFICATIONS</span>
+      
+      
+    </div>
+  </div>
+  
+
+  <!-- Category filter -->
+  <div class="filters" id="filters">
+    <button class="filter-btn active" onclick="filterBy('ALL', this)">All</button>
+    
+    <button class="filter-btn" onclick="filterBy('MANIFEST', this)">MANIFEST (15)</button>
+    
+    <button class="filter-btn" onclick="filterBy('SECRETS', this)">SECRETS (8)</button>
+    
+  </div>
+
+  <!-- Findings -->
+  <div id="findings-list">
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.deeplinkresolver.SharedTextRedirectionActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.meesho.supply.main.deeplinkresolver.SharedTextRedirectionActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.MainActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.meesho.supply.main.MainActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.meesho.supply.main.TrampolineActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>io.verloop.sdk.ui.VerloopActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: io.verloop.sdk.ui.VerloopActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>in.juspay.hypersdk.core.CustomtabResult is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: in.juspay.hypersdk.core.CustomtabResult</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>in.juspay.hypersdk.core.RedirectResponseActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: in.juspay.hypersdk.core.RedirectResponseActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.facebook.CustomTabActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.facebook.CustomTabActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Service without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.MyFcmService is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Service: com.meesho.pushnotify.MyFcmService</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_SERVICE &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.appsflyer.SingleInstallBroadcastReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.appsflyer.SingleInstallBroadcastReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.AppUpdateReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.supply.main.AppUpdateReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.download.DownloadCompletionListener is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.download.DownloadCompletionListener</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.pullnotifications.br.PNPullAlarmReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.PNPullAlarmReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.pullnotifications.br.PNAlarmReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.PNAlarmReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.pullnotifications.br.RebootBroadcastReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.RebootBroadcastReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.otpless.autoread.main.OtplessAutoReadZeroTapReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.otpless.autoread.main.OtplessAutoReadZeroTapReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: c103703e120ae8cc73c9248622f3cd1e</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 7e034df218060c9158c3e8564ca3bd79</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 07191610582e3960807a9a87fc2e93fe</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: b64daf3b5a73e07b1199d56f7e74f8b0</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 2576e2ed19331cc46187226867c950e1</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 0f95c44ce4ed36b99cf74657d4a911d5</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 8c5f929a3842b9a41e9fee00de008e64</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX:0
+          </p>
+
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 6c52af208a0fca07b81ffad88f5cc26f</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  </div>
+
+</div>
+
+<footer>Generated by APKAnalyzer &nbsp;·&nbsp; com.meesho.supply</footer>
+
+<script>
+function toggleBody(header) {
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+function filterBy(cat, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.finding').forEach(f => {
+    f.style.display = (cat === 'ALL' || f.dataset.category === cat) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

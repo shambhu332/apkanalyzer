@@ -1,0 +1,109 @@
+rules:
+  - id: STORAGE_WORLD_READABLE
+    title: "File opened with MODE_WORLD_READABLE"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-732
+    cvss: 6.5
+    category: STORAGE
+    description: >
+      MODE_WORLD_READABLE (0x1) makes private app files accessible to any other
+      installed application via /data/data/<pkg>/files/.
+    smali_pattern: 'openFileOutput'
+    remediation: "Use MODE_PRIVATE (0) exclusively."
+
+  - id: STORAGE_SQLITE_NO_ENCRYPTION
+    title: "SQLite database used without encryption"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-312
+    cvss: 5.3
+    category: STORAGE
+    description: >
+      Android SQLite databases are stored as plaintext files. On rooted devices
+      or via ADB backup, these files are accessible.
+    smali_pattern: 'SQLiteOpenHelper'
+    remediation: "Consider SQLCipher for at-rest encryption of sensitive databases."
+
+  - id: STORAGE_PREFS_SENSITIVE
+    title: "Sensitive key written to SharedPreferences"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-312
+    cvss: 7.5
+    category: STORAGE
+    description: >
+      SharedPreferences are stored as plaintext XML in /data/data/<pkg>/shared_prefs/
+      and can be read on rooted devices.
+    smali_pattern: 'SharedPreferences\$Editor;->putString'
+    remediation: "Use EncryptedSharedPreferences from Jetpack Security."
+
+  - id: STORAGE_EXTERNAL_DIR
+    title: "Sensitive data written to external storage"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-922
+    cvss: 6.5
+    category: STORAGE
+    description: >
+      External storage (sdcard, getExternalFilesDir) is world-readable on
+      pre-Android-10 devices and remains accessible to any app holding
+      READ_EXTERNAL_STORAGE.
+    smali_pattern: 'getExternalStorageDirectory|getExternalStoragePublicDirectory'
+    remediation: 'Use Context.getFilesDir() for app-private storage.'
+
+  - id: STORAGE_TEMP_FILE_INSECURE
+    title: "Insecure temp file via File.createTempFile in shared dir"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-377
+    cvss: 5.3
+    category: STORAGE
+    description: >
+      File.createTempFile without a directory argument places files under
+      /data/local/tmp on some systems, which is world-readable. Even with
+      app-private placement, the predictable name + race window enables
+      symlink attacks on rooted devices.
+    smali_pattern: 'File;->createTempFile'
+    remediation: 'Pass an explicit dir = context.getCacheDir().'
+
+  - id: STORAGE_BACKUP_ALLOWED
+    title: "android:allowBackup not explicitly disabled"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-200
+    cvss: 4.3
+    category: STORAGE
+    description: >
+      With allowBackup=true (the default through API 30) any user can extract
+      app-private data via `adb backup`, including SharedPreferences and SQLite
+      databases.
+    smali_pattern: 'android:allowBackup="true"'
+    remediation: 'Set android:allowBackup="false" in the manifest, or define a fullBackupContent rules file excluding sensitive data.'
+
+  - id: STORAGE_LOG_TO_FILE
+    title: "Logs are written to a file on disk"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-532
+    cvss: 3.7
+    category: STORAGE
+    description: >
+      Routing application logs to a writable file means any leaked log line
+      becomes durable evidence on the device, accessible to backups and to
+      any process with read access.
+    smali_pattern: 'FileWriter;-><init>.*log|"app\.log"|"debug\.log"'
+    remediation: 'Strip Log calls in release builds via ProGuard/R8 (-assumenosideeffects android.util.Log).'
+
+  - id: STORAGE_HARDCODED_DB_KEY
+    title: "Hardcoded SQLCipher passphrase"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-798
+    cvss: 7.4
+    category: STORAGE
+    description: >
+      A constant string passed to SQLiteDatabase.openOrCreateDatabase / SQLCipher
+      acts as a hardcoded encryption key, defeating the purpose of encryption.
+    smali_pattern: 'SQLiteDatabase;->openOrCreateDatabase.*const-string'
+    remediation: 'Derive the passphrase from a user secret or store it in Android Keystore.'

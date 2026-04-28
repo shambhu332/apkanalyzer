@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APKAnalyzer — Advanced Android Static Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#070b14; --bg-2:#0a1020; --surface:#101729; --surface-2:#172033;
+  --surface-3:#1f2a44; --border:#1d2842; --border-2:#2a3a5e;
+  --text:#e8eef9; --text-2:#aab4cc; --muted:#6c7891;
+  --accent:#3b82f6; --accent-2:#6366f1; --accent-3:#8b5cf6;
+  --critical:#ef4444; --high:#f97316; --medium:#eab308; --low:#22c55e; --info:#60a5fa;
+  --success:#10b981; --glow:rgba(59,130,246,0.18);
+  --glow-critical:rgba(239,68,68,0.25); --glow-high:rgba(249,115,22,0.22);
+  --shadow:0 10px 40px rgba(0,0,0,0.4);
+  --grad-blue:linear-gradient(135deg,#3b82f6,#6366f1);
+  --grad-purple:linear-gradient(135deg,#8b5cf6,#3b82f6);
+  --grad-danger:linear-gradient(135deg,#ef4444,#f97316);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font:14.5px/1.6 'Inter',system-ui,sans-serif}
+body{
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(99,102,241,0.10), transparent 60%),
+    radial-gradient(900px 600px at -5% 110%, rgba(59,130,246,0.10), transparent 60%),
+    var(--bg);
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font-family:inherit}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+.sidebar{
+  background:var(--surface);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+}
+.brand{display:flex;align-items:center;gap:12px;padding:22px 22px 18px}
+.brand .mark{
+  width:38px;height:38px;border-radius:11px;background:var(--grad-blue);
+  display:grid;place-items:center;font-size:18px;
+  box-shadow:0 6px 16px rgba(59,130,246,0.4);
+}
+.brand h1{font-size:17px;font-weight:800;letter-spacing:-.01em}
+.brand .ver{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.nav{padding:8px 12px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
+.nav-section{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:14px 12px 6px}
+.nav-item{
+  display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:8px;
+  color:var(--text-2);font-size:13.5px;font-weight:500;cursor:pointer;
+  border:1px solid transparent;transition:all .15s;
+}
+.nav-item:hover{background:var(--surface-2);color:var(--text)}
+.nav-item.active{background:var(--surface-2);color:var(--accent);border-color:var(--border-2)}
+.nav-item .icon{width:18px;text-align:center;font-size:14px}
+.nav-item .badge{margin-left:auto;background:var(--surface-3);color:var(--text-2);
+  font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600}
+.nav-item.active .badge{background:var(--accent);color:#fff}
+.sidebar-foot{padding:14px 18px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
+
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:14px 28px;
+  border-bottom:1px solid var(--border);background:rgba(10,16,32,0.6);
+  backdrop-filter:blur(8px);position:sticky;top:0;z-index:10;
+}
+.crumb{font-size:13px;color:var(--muted)}
+.crumb b{color:var(--text);font-weight:600}
+.topbar .spacer{flex:1}
+.search-global{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:7px 12px;color:var(--text);font-size:13px;width:280px;outline:none;
+  transition:border-color .15s,box-shadow .15s;
+}
+.search-global:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
+  border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);color:var(--text);
+  transition:all .15s;text-decoration:none;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--grad-blue);border:none;color:#fff;box-shadow:0 4px 14px rgba(59,130,246,0.35)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,0.5);color:#fff}
+.btn-danger{border-color:rgba(239,68,68,0.4);color:var(--critical)}
+.btn-danger:hover{background:rgba(239,68,68,0.1)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--text-2)}
+.btn-ghost:hover{background:var(--surface);color:var(--text);border-color:var(--border)}
+
+.page{padding:24px 28px 60px;max-width:100%}
+.page h2{font-size:22px;font-weight:700;margin-bottom:6px;letter-spacing:-.01em}
+.page .sub{color:var(--muted);font-size:13.5px;margin-bottom:22px}
+
+/* ── Tab visibility ─────────────────────────────────────────────────── */
+.tab{display:none;animation:fadeIn .25s ease}
+.tab.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Cards ──────────────────────────────────────────────────────────── */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px;transition:border-color .15s,transform .15s;
+}
+.card:hover{border-color:var(--border-2)}
+.card h3{font-size:14px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.card h3 .info{color:var(--muted);font-size:12px;font-weight:400;margin-left:auto}
+
+.grid{display:grid;gap:14px}
+.grid.kpi{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.grid.cols-2{grid-template-columns:1fr 1fr}
+.grid.cols-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:980px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr}}
+
+.kpi-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px;position:relative;overflow:hidden;
+}
+.kpi-card .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.kpi-card .value{font-size:32px;font-weight:800;line-height:1.1;margin-top:8px;letter-spacing:-.02em}
+.kpi-card .delta{font-size:12px;color:var(--text-2);margin-top:4px}
+.kpi-card .accent{position:absolute;inset:auto 0 0 0;height:3px;background:var(--grad-blue)}
+.kpi-card.critical .accent{background:var(--grad-danger)}
+.kpi-card.critical .value{color:var(--critical)}
+.kpi-card.high .accent{background:linear-gradient(135deg,#f97316,#eab308)}
+.kpi-card.high .value{color:var(--high)}
+.kpi-card.medium .accent{background:linear-gradient(135deg,#eab308,#22c55e)}
+.kpi-card.medium .value{color:var(--medium)}
+.kpi-card.low .accent{background:linear-gradient(135deg,#22c55e,#10b981)}
+.kpi-card.low .value{color:var(--low)}
+
+/* ── Risk gauge ────────────────────────────────────────────────────── */
+.gauge{display:flex;align-items:center;gap:18px}
+.gauge-ring{position:relative;width:130px;height:130px;flex-shrink:0}
+.gauge-ring svg{transform:rotate(-90deg);width:100%;height:100%}
+.gauge-ring .track{fill:none;stroke:var(--surface-2);stroke-width:10}
+.gauge-ring .arc{fill:none;stroke:var(--accent);stroke-width:10;stroke-linecap:round;
+  transition:stroke-dasharray 1s ease, stroke 0.3s}
+.gauge-grade{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:46px;font-weight:800;letter-spacing:-.04em;
+}
+.gauge-grade.A{color:var(--low)}
+.gauge-grade.B{color:#34d399}
+.gauge-grade.C{color:var(--medium)}
+.gauge-grade.D{color:var(--high)}
+.gauge-grade.F{color:var(--critical)}
+.gauge-info{flex:1}
+.gauge-info .level{font-size:18px;font-weight:700;margin-bottom:4px}
+.gauge-info .desc{font-size:13px;color:var(--text-2);line-height:1.5}
+
+/* ── Charts ─────────────────────────────────────────────────────────── */
+.chart-wrap{position:relative;height:240px}
+.chart-wrap.tall{height:300px}
+
+/* ── Upload landing ─────────────────────────────────────────────────── */
+.upload-stage{display:flex;flex-direction:column;align-items:center;
+  padding:24px 24px 60px;max-width:760px;margin:0 auto}
+.hero{text-align:center;padding:24px 0 36px}
+.hero h2{
+  font-size:42px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-bottom:14px;
+  background:linear-gradient(135deg,#fff 30%,#7c9bf2 60%,#a78bfa);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero p{color:var(--text-2);font-size:16px;max-width:560px;margin:0 auto}
+.pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:24px 0 4px}
+.pill{
+  font-size:12px;padding:5px 13px;border-radius:20px;border:1px solid var(--border);
+  color:var(--text-2);background:var(--surface)
+}
+.pill.active{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,0.08)}
+
+.dropzone{
+  width:100%;border:2px dashed var(--border-2);border-radius:18px;
+  padding:48px 32px;text-align:center;cursor:pointer;background:var(--surface);
+  transition:all .25s;position:relative;overflow:hidden;
+}
+.dropzone::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%,var(--glow) 0%,transparent 70%);
+  opacity:0;transition:opacity .3s;
+}
+.dropzone:hover,.dropzone.drag-over{border-color:var(--accent);background:var(--surface-2);box-shadow:0 0 50px var(--glow)}
+.dropzone:hover::before,.dropzone.drag-over::before{opacity:1}
+.dropzone.drag-over{transform:scale(1.005)}
+.drop-icon{font-size:52px;margin-bottom:14px;display:block;filter:drop-shadow(0 0 14px var(--accent))}
+.drop-title{font-size:19px;font-weight:600;margin-bottom:6px}
+.drop-sub{font-size:13px;color:var(--text-2);margin-bottom:20px}
+.browse-btn{
+  display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border-radius:10px;
+  border:1px solid var(--accent);background:rgba(59,130,246,0.12);color:var(--accent);
+  font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;
+}
+.browse-btn:hover{background:rgba(59,130,246,0.22);box-shadow:0 0 18px rgba(59,130,246,0.4)}
+#file-input{display:none}
+
+.options-panel{
+  margin-top:18px;background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:22px 24px;display:none;
+}
+.options-panel.show{display:block}
+.options-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px}
+@media(max-width:760px){.options-grid{grid-template-columns:1fr}}
+.opt-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-weight:600}
+select,input[type=range],input[type=text]{
+  width:100%;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);padding:8px 12px;font-size:13px;
+  outline:none;appearance:none;cursor:pointer;
+}
+select:focus,input:focus{border-color:var(--accent)}
+.range-row{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;padding:0;height:4px;accent-color:var(--accent)}
+.range-val{font-size:13px;font-weight:600;color:var(--accent);min-width:24px;text-align:right}
+.toggle-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-2)}
+.toggle-row input{width:auto;cursor:pointer;accent-color:var(--accent)}
+.file-chip{
+  display:none;align-items:center;gap:12px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:14px;
+}
+.file-chip.show{display:flex}
+.file-info{flex:1}
+.file-name{font-weight:600}
+.file-size{font-size:11px;color:var(--muted)}
+.file-remove{cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:4px;transition:color .2s}
+.file-remove:hover{color:var(--critical)}
+.scan-btn{
+  width:100%;padding:14px;border-radius:12px;border:none;background:var(--grad-blue);
+  color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;
+  box-shadow:0 6px 24px rgba(59,130,246,0.35);
+}
+.scan-btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.scan-btn:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 10px 32px rgba(59,130,246,0.5)}
+
+/* ── Progress ─────────────────────────────────────────────────────── */
+#progress-view{display:none;width:100%;max-width:680px;margin:0 auto;animation:fadeIn .3s ease}
+#progress-view.show{display:block}
+.progress-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:36px 32px;text-align:center}
+.scan-anim{width:88px;height:88px;margin:0 auto 22px;position:relative}
+.scan-ring{
+  width:88px;height:88px;border-radius:50%;border:3px solid transparent;
+  border-top-color:var(--accent);border-right-color:var(--accent-2);
+  animation:spin 1.2s linear infinite;position:absolute;inset:0;
+}
+.scan-ring.delay{width:64px;height:64px;top:12px;left:12px;border-top-color:var(--accent-3);animation-duration:2s;animation-direction:reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scan-center{position:absolute;inset:0;display:grid;place-items:center;font-size:28px}
+.progress-stage{font-size:18px;font-weight:600;margin-bottom:6px}
+.progress-detail{font-size:13px;color:var(--text-2);min-height:20px;margin-bottom:24px}
+.progress-bar-track{width:100%;height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-bottom:28px}
+.progress-bar-fill{height:100%;border-radius:99px;background:var(--grad-blue);transition:width .5s ease;width:0%;position:relative}
+.progress-bar-fill::after{
+  content:'';position:absolute;right:0;top:0;bottom:0;width:60px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.3));animation:shimmer 1.5s infinite;
+}
+@keyframes shimmer{from{transform:translateX(-60px)}to{transform:translateX(20px)}}
+.stages{display:flex;flex-direction:column;gap:7px;text-align:left;font-size:13px}
+.stage-item{display:flex;align-items:center;gap:10px;color:var(--muted);transition:color .25s}
+.stage-item.active{color:var(--accent)}
+.stage-item.done{color:var(--success)}
+.stage-dot{width:8px;height:8px;border-radius:50%;background:var(--border-2);transition:all .25s}
+.stage-item.active .stage-dot{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 1.2s infinite}
+.stage-item.done .stage-dot{background:var(--success)}
+@keyframes pulse{0%,100%{box-shadow:0 0 4px var(--accent)}50%{box-shadow:0 0 14px var(--accent)}}
+
+/* ── Findings table ─────────────────────────────────────────────────── */
+.toolbar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px;
+  padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+}
+.f-btn{
+  padding:5px 13px;border-radius:18px;font-size:12px;border:1px solid var(--border);
+  background:transparent;color:var(--text-2);cursor:pointer;transition:all .15s;font-weight:500;
+}
+.f-btn:hover{color:var(--text);border-color:var(--border-2)}
+.f-btn.active{background:var(--surface-2);color:var(--text);border-color:var(--accent)}
+.f-btn .count{opacity:.6;margin-left:5px;font-size:11px}
+.toolbar select{width:auto;padding:5px 10px;font-size:12px;border-radius:18px}
+.toolbar .spacer{flex:1}
+
+.finding-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  margin-bottom:8px;overflow:hidden;transition:border-color .15s;
+}
+.finding-card:hover{border-color:var(--border-2)}
+.finding-card.open{border-color:var(--accent)}
+.finding-head{
+  display:flex;align-items:center;gap:12px;padding:13px 18px;cursor:pointer;
+  user-select:none;transition:background .15s;
+}
+.finding-head:hover{background:rgba(255,255,255,0.02)}
+.sev-badge{
+  font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;
+  text-transform:uppercase;letter-spacing:.06em;min-width:68px;text-align:center;flex-shrink:0;
+}
+.sev-badge.CRITICAL{background:var(--critical);color:#fff}
+.sev-badge.HIGH{background:var(--high);color:#fff}
+.sev-badge.MEDIUM{background:var(--medium);color:#000}
+.sev-badge.LOW{background:var(--low);color:#fff}
+.sev-badge.INFO{background:var(--info);color:#fff}
+.finding-title-txt{flex:1;font-size:14px;font-weight:500}
+.finding-meta-txt{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;white-space:nowrap}
+.tag{
+  font-size:11px;background:var(--surface-2);padding:2px 8px;border-radius:5px;
+  border:1px solid var(--border);color:var(--text-2);font-weight:500;
+}
+.tag.cwe{color:var(--accent-2)}
+.tag.owasp{background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.4);color:var(--accent-3)}
+.tag.cvss{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:var(--critical)}
+.chevron{color:var(--muted);font-size:14px;transition:transform .2s;flex-shrink:0}
+.finding-card.open .chevron{transform:rotate(180deg)}
+.finding-body{display:none;padding:0 18px 18px;border-top:1px solid var(--border)}
+.finding-card.open .finding-body{display:block}
+.detail-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:16px}
+@media(max-width:780px){.detail-grid{grid-template-columns:1fr}}
+.d-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px;font-weight:600}
+.d-value{font-size:13.5px;color:var(--text-2);line-height:1.55}
+pre.evidence{
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;
+  font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+  font-family:'JetBrains Mono',monospace;color:#cbd5e1;
+}
+.flow-box{
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;
+  font-size:12px;font-family:'JetBrains Mono',monospace;line-height:1.7;
+}
+.flow-src{color:#f472b6;font-weight:600}
+.flow-snk{color:#34d399;font-weight:600}
+.flow-arr{color:var(--muted)}
+.remediation-box{
+  background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);
+  border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.6;color:#a7f3d0;
+}
+.tags-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.no-findings{text-align:center;padding:60px 20px;color:var(--muted)}
+.no-findings .emoji{font-size:48px;margin-bottom:12px;display:block}
+
+/* ── MASVS / OWASP grid ───────────────────────────────────────────── */
+.masvs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.masvs-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;position:relative;overflow:hidden;transition:all .2s;
+}
+.masvs-card .accent-bar{position:absolute;top:0;left:0;width:4px;height:100%;background:var(--success)}
+.masvs-card.has-issue .accent-bar{background:var(--critical)}
+.masvs-card.minor-issue .accent-bar{background:var(--medium)}
+.masvs-card .code{font-size:11px;color:var(--accent-3);font-weight:700;letter-spacing:.06em}
+.masvs-card .title{font-size:14px;font-weight:600;margin:4px 0 8px}
+.masvs-card .count-row{display:flex;align-items:center;gap:10px;margin-top:8px}
+.masvs-card .count{font-size:24px;font-weight:800;line-height:1}
+.masvs-card.has-issue .count{color:var(--critical)}
+.masvs-card.minor-issue .count{color:var(--medium)}
+.masvs-card.clean .count{color:var(--success)}
+.masvs-card .status{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+/* ── Permissions ────────────────────────────────────────────────────── */
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.perm-pill{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+}
+.perm-pill.dangerous{border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.06)}
+.perm-pill .icon{font-size:18px}
+.perm-pill .name{font-size:12.5px;font-weight:500;flex:1}
+.perm-pill.dangerous .name{color:var(--critical)}
+.perm-pill .level{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+/* ── History ────────────────────────────────────────────────────────── */
+table.history{width:100%;border-collapse:collapse;background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;overflow:hidden}
+table.history th{
+  text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;
+  color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--border);
+  font-weight:600;letter-spacing:.05em;
+}
+table.history td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px}
+table.history tr:last-child td{border-bottom:none}
+table.history tr:hover td{background:rgba(255,255,255,.02)}
+.grade-badge{font-weight:800;font-size:13px;width:28px;height:28px;border-radius:50%;
+  display:inline-grid;place-items:center;background:var(--surface-2)}
+.grade-badge.A{color:var(--low);background:rgba(34,197,94,0.12)}
+.grade-badge.B{color:#34d399;background:rgba(52,211,153,0.12)}
+.grade-badge.C{color:var(--medium);background:rgba(234,179,8,0.12)}
+.grade-badge.D{color:var(--high);background:rgba(249,115,22,0.12)}
+.grade-badge.F{color:var(--critical);background:rgba(239,68,68,0.12)}
+
+/* ── Manifest viewer ────────────────────────────────────────────────── */
+.kv-grid{display:grid;grid-template-columns:160px 1fr;gap:10px 16px;font-size:13px}
+.kv-grid dt{color:var(--muted);font-weight:500}
+.kv-grid dd{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12.5px;word-break:break-all}
+.flag-yes{color:var(--low);font-weight:600}
+.flag-no{color:var(--critical);font-weight:600}
+.component-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.component-row{
+  background:var(--surface-2);padding:8px 12px;border-radius:8px;
+  font-size:12px;font-family:'JetBrains Mono',monospace;border:1px solid var(--border);
+}
+.component-row.unprotected{border-left:3px solid var(--critical)}
+
+/* ── Empty state ────────────────────────────────────────────────────── */
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty .emoji{font-size:42px;margin-bottom:10px;display:block}
+
+/* ── Error card ─────────────────────────────────────────────────────── */
+.error-card{
+  background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);
+  border-radius:14px;padding:24px 28px;text-align:center;margin:24px auto;max-width:580px;display:none;
+}
+.error-card.show{display:block}
+.error-card h3{color:var(--critical);margin-bottom:10px}
+.error-card pre{font-size:12px;color:var(--text-2);white-space:pre-wrap;margin-top:10px}
+
+/* ── Print / export ─────────────────────────────────────────────────── */
+@media print{
+  .sidebar,.topbar,#upload-stage,#progress-view,.toolbar,.action-btns,.btn{display:none!important}
+  .main{display:block}.app{display:block}.page{padding:0}
+  .card{break-inside:avoid;page-break-inside:avoid}
+  body{background:#fff;color:#000}
+  .finding-card{box-shadow:none;border:1px solid #ccc}
+  .finding-body{display:block!important}
+  *{color:#000!important;background:#fff!important;border-color:#ccc!important}
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#3a4a72}
+
+/* ── Modal ──────────────────────────────────────────────────────────── */
+.modal-bg{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:50;
+  align-items:center;justify-content:center;backdrop-filter:blur(4px);
+}
+.modal-bg.show{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:24px 26px;max-width:520px;width:100%;box-shadow:var(--shadow);
+}
+.modal h3{margin-bottom:8px}
+.modal p{color:var(--text-2);font-size:13.5px;line-height:1.6;margin-bottom:18px}
+.modal .actions{display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Sidebar ────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">🛡️</div>
+      <div>
+        <h1>APKAnalyzer</h1>
+        <div class="ver">v2.0 · Pro</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Workspace</div>
+      <div class="nav-item active" data-tab="dashboard"><span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-tab="scan"><span class="icon">🔍</span> New Scan</div>
+      <div class="nav-item" data-tab="history"><span class="icon">📁</span> Scan History <span class="badge" id="badge-history">0</span></div>
+
+      <div class="nav-section">Current Result</div>
+      <div class="nav-item disabled" data-tab="overview"><span class="icon">🎯</span> Overview <span class="badge" id="badge-total">—</span></div>
+      <div class="nav-item disabled" data-tab="findings"><span class="icon">🚨</span> Findings <span class="badge" id="badge-findings">—</span></div>
+      <div class="nav-item disabled" data-tab="masvs"><span class="icon">📋</span> OWASP MASVS</div>
+      <div class="nav-item disabled" data-tab="permissions"><span class="icon">🔐</span> Permissions <span class="badge" id="badge-perms">—</span></div>
+      <div class="nav-item disabled" data-tab="manifest"><span class="icon">📜</span> Manifest</div>
+      <div class="nav-item disabled" data-tab="components"><span class="icon">🧩</span> Components</div>
+
+      <div class="nav-section">Reference</div>
+      <div class="nav-item" data-tab="coverage"><span class="icon">📚</span> Detector Coverage</div>
+      <div class="nav-item" data-tab="about"><span class="icon">ℹ️</span> About</div>
+    </nav>
+
+    <div class="sidebar-foot">
+      Scan engine ready · APIs at <code style="color:var(--accent)">/api/*</code>
+    </div>
+  </aside>
+
+  <!-- ── Main area ──────────────────────────────────────────────────── -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb" id="crumb"><b>Dashboard</b></div>
+      <div class="spacer"></div>
+      <input class="search-global" id="global-search" placeholder="🔍  Search findings, CWE, OWASP…" oninput="onGlobalSearch(this.value)">
+      <button class="btn" id="btn-export-html" onclick="openHtmlReport()" disabled>📑 HTML Report</button>
+      <button class="btn" id="btn-export-json" onclick="downloadJSON()" disabled>⬇️ JSON</button>
+      <button class="btn" id="btn-export-sarif" onclick="downloadSARIF()" disabled>⬇️ SARIF</button>
+      <button class="btn" onclick="window.print()" id="btn-print" disabled>🖨️ Print PDF</button>
+      <button class="btn btn-primary" onclick="goTo('scan')">+ New Scan</button>
+    </div>
+
+    <div class="page">
+
+      <!-- ── DASHBOARD TAB ───────────────────────────────────────────── -->
+      <div class="tab active" id="tab-dashboard">
+        <h2>Workspace Dashboard</h2>
+        <p class="sub">Overview across every APK you've analysed in this workspace.</p>
+
+        <div class="grid kpi" id="dash-kpi">
+          <div class="kpi-card"><div class="label">Total scans</div><div class="value" id="kpi-scans">—</div></div>
+          <div class="kpi-card"><div class="label">Total findings</div><div class="value" id="kpi-findings">—</div></div>
+          <div class="kpi-card critical"><div class="label">Critical issues</div><div class="value" id="kpi-critical">—</div></div>
+          <div class="kpi-card high"><div class="label">High issues</div><div class="value" id="kpi-high">—</div></div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:16px">
+          <div class="card">
+            <h3>Severity distribution <span class="info">across all scans</span></h3>
+            <div class="chart-wrap"><canvas id="dash-severity"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>OWASP Mobile Top-10 coverage <span class="info">aggregated</span></h3>
+            <div class="chart-wrap"><canvas id="dash-owasp"></canvas></div>
+          </div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:16px">
+          <div class="card">
+            <h3>Risk grade distribution</h3>
+            <div class="chart-wrap"><canvas id="dash-grade"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Recent scans</h3>
+            <div id="recent-scans"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── NEW SCAN TAB ────────────────────────────────────────────── -->
+      <div class="tab" id="tab-scan">
+        <div class="upload-stage" id="upload-stage">
+          <div class="hero">
+            <h2>Static Analysis That Actually Reads The Code</h2>
+            <p>Reachability-pruned taint analysis · 11 detector classes · OWASP MASVS · CVSS scoring · MobSF-grade depth with fewer false positives.</p>
+            <div class="pills">
+              <span class="pill active">🔥 Crypto</span>
+              <span class="pill active">🌐 Network / TLS</span>
+              <span class="pill active">📦 Storage</span>
+              <span class="pill active">🪞 WebView</span>
+              <span class="pill active">🔑 Secrets</span>
+              <span class="pill active">🔗 Deeplinks</span>
+              <span class="pill active">🚦 Intents/IPC</span>
+              <span class="pill active">📜 Logging</span>
+              <span class="pill active">📦 Native libs</span>
+              <span class="pill active">🌪️ Obfuscation</span>
+              <span class="pill active">👁 Privacy</span>
+            </div>
+          </div>
+
+          <div style="width:100%">
+            <div class="file-chip" id="file-chip">
+              <span style="font-size:24px">📦</span>
+              <div class="file-info">
+                <div class="file-name" id="chip-name">—</div>
+                <div class="file-size" id="chip-size">—</div>
+              </div>
+              <span class="file-remove" id="file-remove" title="Remove">✕</span>
+            </div>
+
+            <div class="dropzone" id="dropzone">
+              <span class="drop-icon">📲</span>
+              <div class="drop-title">Drop your APK here</div>
+              <div class="drop-sub">or click to browse — up to 150 MB</div>
+              <label class="browse-btn" for="file-input"><span>📁</span> Choose APK File</label>
+              <input type="file" id="file-input" accept=".apk">
+            </div>
+
+            <div class="options-panel" id="options-panel">
+              <div class="options-grid">
+                <div>
+                  <div class="opt-label">Confidence threshold</div>
+                  <select id="opt-confidence">
+                    <option value="LOW" selected>LOW — Show all findings</option>
+                    <option value="MEDIUM">MEDIUM — Skip heuristics</option>
+                    <option value="HIGH">HIGH — Confirmed only</option>
+                  </select>
+                </div>
+                <div>
+                  <div class="opt-label">Taint depth (call frames)</div>
+                  <div class="range-row">
+                    <input type="range" id="opt-depth" min="2" max="12" value="6"
+                           oninput="document.getElementById('depth-val').textContent=this.value">
+                    <span class="range-val" id="depth-val">6</span>
+                  </div>
+                </div>
+                <div>
+                  <div class="opt-label">Mode</div>
+                  <select id="opt-mode">
+                    <option value="balanced" selected>Balanced (default)</option>
+                    <option value="thorough">Thorough — every method</option>
+                    <option value="fast">Fast — reachable only</option>
+                  </select>
+                </div>
+              </div>
+              <button class="scan-btn" id="scan-btn" disabled>🔍 &nbsp; Start Analysis</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="error-card" id="error-view">
+          <h3>⚠️ Analysis Failed</h3>
+          <p id="error-msg"></p>
+          <pre id="error-stack" style="display:none"></pre>
+          <button class="btn btn-primary" onclick="resetUI()" style="margin-top:14px">Try Again</button>
+        </div>
+      </div>
+
+      <!-- ── PROGRESS VIEW (modal-style) ─────────────────────────────── -->
+      <div id="progress-view">
+        <div class="progress-card">
+          <div class="scan-anim">
+            <div class="scan-ring"></div>
+            <div class="scan-ring delay"></div>
+            <div class="scan-center">🔬</div>
+          </div>
+          <div class="progress-stage" id="prog-stage">Initialising…</div>
+          <div class="progress-detail" id="prog-detail"></div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="prog-bar"></div></div>
+          <div class="stages" id="stages-list"></div>
+        </div>
+      </div>
+
+      <!-- ── HISTORY TAB ─────────────────────────────────────────────── -->
+      <div class="tab" id="tab-history">
+        <h2>Scan History</h2>
+        <p class="sub">Every report persisted on this server. Click a row to load that scan into the result tabs.</p>
+        <div id="history-table"></div>
+      </div>
+
+      <!-- ── OVERVIEW TAB ────────────────────────────────────────────── -->
+      <div class="tab" id="tab-overview">
+        <h2 id="ov-title">Result Overview</h2>
+        <p class="sub" id="ov-sub"></p>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>Risk grade</h3>
+            <div class="gauge">
+              <div class="gauge-ring">
+                <svg viewBox="0 0 100 100">
+                  <circle class="track" cx="50" cy="50" r="42"/>
+                  <circle class="arc" id="gauge-arc" cx="50" cy="50" r="42" stroke-dasharray="0 263"/>
+                </svg>
+                <div class="gauge-grade" id="gauge-grade">?</div>
+              </div>
+              <div class="gauge-info">
+                <div class="level" id="gauge-level">—</div>
+                <div class="desc" id="gauge-desc">Run a scan to populate the risk grade.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Severity breakdown</h3>
+            <div class="chart-wrap"><canvas id="ov-severity"></canvas></div>
+          </div>
+        </div>
+
+        <div class="grid kpi" style="margin-top:16px" id="ov-kpis">
+          <div class="kpi-card critical"><div class="label">Critical</div><div class="value" id="ov-kpi-critical">0</div></div>
+          <div class="kpi-card high"><div class="label">High</div><div class="value" id="ov-kpi-high">0</div></div>
+          <div class="kpi-card medium"><div class="label">Medium</div><div class="value" id="ov-kpi-medium">0</div></div>
+          <div class="kpi-card low"><div class="label">Low</div><div class="value" id="ov-kpi-low">0</div></div>
+          <div class="kpi-card"><div class="label">Total</div><div class="value" id="ov-kpi-total">0</div></div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:16px">
+          <div class="card">
+            <h3>Findings by category</h3>
+            <div class="chart-wrap"><canvas id="ov-category"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>OWASP Mobile Top-10</h3>
+            <div class="chart-wrap"><canvas id="ov-owasp"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>Top findings <span class="info">most critical first</span></h3>
+          <div id="ov-top-findings"></div>
+        </div>
+      </div>
+
+      <!-- ── FINDINGS TAB ────────────────────────────────────────────── -->
+      <div class="tab" id="tab-findings">
+        <h2>Findings</h2>
+        <p class="sub">All vulnerabilities discovered during the scan. Click any row to expand.</p>
+
+        <div class="toolbar" id="findings-toolbar">
+          <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Severity</strong>
+          <button class="f-btn active" data-filter="severity" data-val="ALL">All</button>
+          <button class="f-btn" data-filter="severity" data-val="CRITICAL">Critical</button>
+          <button class="f-btn" data-filter="severity" data-val="HIGH">High</button>
+          <button class="f-btn" data-filter="severity" data-val="MEDIUM">Medium</button>
+          <button class="f-btn" data-filter="severity" data-val="LOW">Low</button>
+
+          <span style="width:1px;height:20px;background:var(--border)"></span>
+
+          <select id="filter-category"><option value="ALL">All categories</option></select>
+          <select id="filter-confidence">
+            <option value="ALL">Any confidence</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+          <select id="filter-owasp"><option value="ALL">Any OWASP M-cat</option></select>
+
+          <div class="spacer"></div>
+
+          <select id="filter-sort">
+            <option value="severity">Sort: severity</option>
+            <option value="confidence">Sort: confidence</option>
+            <option value="cvss">Sort: CVSS</option>
+            <option value="category">Sort: category</option>
+          </select>
+        </div>
+
+        <div id="findings-container"></div>
+      </div>
+
+      <!-- ── MASVS TAB ───────────────────────────────────────────────── -->
+      <div class="tab" id="tab-masvs">
+        <h2>OWASP Mobile Top-10 (2024) Coverage</h2>
+        <p class="sub">Each card shows whether the scanned APK has any findings tagged for that category.</p>
+        <div class="masvs-grid" id="masvs-grid"></div>
+      </div>
+
+      <!-- ── PERMISSIONS TAB ─────────────────────────────────────────── -->
+      <div class="tab" id="tab-permissions">
+        <h2>Declared Permissions</h2>
+        <p class="sub">Dangerous permissions are highlighted — these prompt the user at runtime and gate sensitive APIs.</p>
+
+        <div class="card" style="margin-bottom:14px">
+          <h3>Dangerous permissions <span class="info" id="perm-dangerous-count">0</span></h3>
+          <div class="perm-grid" id="perm-dangerous"></div>
+        </div>
+
+        <div class="card">
+          <h3>All declared permissions <span class="info" id="perm-all-count">0</span></h3>
+          <div class="perm-grid" id="perm-all"></div>
+        </div>
+      </div>
+
+      <!-- ── MANIFEST TAB ────────────────────────────────────────────── -->
+      <div class="tab" id="tab-manifest">
+        <h2>AndroidManifest.xml</h2>
+        <p class="sub">Security-relevant flags extracted from the manifest.</p>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>Application</h3>
+            <dl class="kv-grid" id="manifest-app"></dl>
+          </div>
+          <div class="card">
+            <h3>Custom permissions</h3>
+            <div id="manifest-custom"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── COMPONENTS TAB ──────────────────────────────────────────── -->
+      <div class="tab" id="tab-components">
+        <h2>Exported Components</h2>
+        <p class="sub">Activities, services, receivers, and providers reachable from outside the app. Unprotected entries (no permission, no signature) are highlighted in red.</p>
+        <div id="components-list"></div>
+      </div>
+
+      <!-- ── COVERAGE TAB (reference) ────────────────────────────────── -->
+      <div class="tab" id="tab-coverage">
+        <h2>Detector Coverage</h2>
+        <p class="sub">What APKAnalyzer looks for, organised by OWASP Mobile Top-10 category.</p>
+        <div class="masvs-grid" id="coverage-grid"></div>
+      </div>
+
+      <!-- ── ABOUT ───────────────────────────────────────────────────── -->
+      <div class="tab" id="tab-about">
+        <h2>About APKAnalyzer</h2>
+        <p class="sub">Open-source Android static analyzer with a focus on precision over noise.</p>
+        <div class="card" style="margin-bottom:14px">
+          <h3>How it works</h3>
+          <p style="color:var(--text-2);font-size:13.5px;line-height:1.7">
+          1. <b>Extract</b> — androguard parses DEX, apktool decodes resources.<br>
+          2. <b>Build IR</b> — a call graph + per-method CFG with a string pool.<br>
+          3. <b>Reachability</b> — only methods reachable from entry points are analysed.<br>
+          4. <b>Taint analysis</b> — sensitive sources (device id, location, user input) are traced through the call graph to security-critical sinks.<br>
+          5. <b>Detector pass</b> — 11 specialised detectors run in parallel: crypto, network, storage, WebView, secrets, deeplinks, intents/IPC, logging, native libs, obfuscation, privacy.<br>
+          6. <b>Score</b> — confidence is adjusted for library / test / debug context, then OWASP MASVS, CVSS, and CWE are attached.<br>
+          7. <b>Report</b> — JSON, HTML, SARIF (GitHub Code Scanning), or this dashboard.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Vulnerability classes covered</h3>
+          <ul style="margin-left:20px;color:var(--text-2);font-size:13.5px;line-height:1.9">
+            <li>Hardcoded credentials, API keys, tokens (AWS/GCP/GitHub/Stripe/Slack/Twilio/SendGrid/Mailgun/Square/JWT/PEM)</li>
+            <li>Weak / broken cryptography — DES/RC4/MD5/SHA1, ECB, static IV, hardcoded keys, no padding, small key sizes, custom KeyStore bypass</li>
+            <li>Insecure communication — cleartext HTTP, custom TrustManager, hostname verifier stubs, weak TLS, missing pinning, network_security_config issues</li>
+            <li>Insecure storage — world-readable prefs, plaintext SQLite, allowBackup, external storage, key-store bypass</li>
+            <li>Insecure logging — Log.* with PII / tokens, printStackTrace, System.out</li>
+            <li>WebView issues — JavaScriptInterface, mixed content, debugging enabled, file:// URL load</li>
+            <li>Deeplinks — no auto-verify, fragment injection, scheme downgrade, OAuth hijack, JS-bridge abuse</li>
+            <li>Intent / IPC — mutable PendingIntent, intent redirection, sticky broadcasts, getParcelableExtra without class</li>
+            <li>Native libraries — missing PIE / NX / RELRO / stack canary, debug symbols shipped, runtime System.load from /sdcard</li>
+            <li>Obfuscation / anti-analysis — dynamic DEX, reflection-heavy code, root / emulator detection</li>
+            <li>Manifest misconfiguration — debuggable, exported components without permission, custom permissions with normal protectionLevel, low targetSdk, missing networkSecurityConfig, tapjacking risk</li>
+            <li>Privacy — sensitive data flowing into log / network / storage sinks, third-party SDK inventory</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                              State                                       ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+const STATE = {
+  selectedFile: null,
+  scanId: null,
+  report: null,
+  charts: {},
+  filters: { severity: "ALL", category: "ALL", confidence: "ALL", owasp: "ALL", search: "", sort: "severity" },
+};
+
+const STAGE_NAMES = [
+  "Loading APK","Unpacking Resources","Manifest","Call Graph","Reachability",
+  "Taint Analysis","Crypto Analysis","Detector Analysis","Manifest Checks",
+  "Native Library Audit","Secret Detection","SDK Inventory","Privacy Checks",
+  "Scoring","Generating Reports","Complete",
+];
+
+const SEV_COLORS = {
+  CRITICAL: "#ef4444", HIGH: "#f97316", MEDIUM: "#eab308",
+  LOW: "#22c55e", INFO: "#60a5fa",
+};
+const SEV_RANK = { CRITICAL:5, HIGH:4, MEDIUM:3, LOW:2, INFO:1 };
+const CONF_RANK = { HIGH:3, MEDIUM:2, LOW:1 };
+
+const COVERAGE_DOC = [
+  { code:"M1",  name:"Improper Credential Usage",         items:["SECRET_AWS_KEY","SECRET_GOOGLE_API_KEY","SECRET_STRIPE_KEY","SECRET_SLACK_TOKEN","SECRET_GITHUB_PAT","SECRET_PRIVATE_KEY_HEADER","SECRET_DB_CONN","CRYPTO_CONSTANT_KEY"] },
+  { code:"M2",  name:"Inadequate Supply Chain Security",  items:["SDK_*","OBFUSC_DYNAMIC_DEX","OBFUSC_LOAD_LIBRARY"] },
+  { code:"M3",  name:"Insecure Authentication / Authorization", items:["DEEPLINK_UNPROTECTED","DEEPLINK_OAUTH_HIJACK","DEEPLINK_NO_AUTO_VERIFY","WEBVIEW_JS_INTERFACE","INTENT_PENDING_MUTABLE"] },
+  { code:"M4",  name:"Insufficient Input/Output Validation",    items:["TAINT_USER_INPUT_TO_SQL","TAINT_USER_INPUT_TO_EXEC","TAINT_USER_INPUT_TO_WEBVIEW","WEBVIEW_MIXED_CONTENT","DEEPLINK_FRAGMENT_INJECTION","INTENT_GET_PARCELABLE_UNCHECKED"] },
+  { code:"M5",  name:"Insecure Communication",            items:["NETWORK_SSL_DISABLED","NETWORK_TRUSTMANAGER_STUB","NETWORK_WEAK_TLS","NETWORK_CLEARTEXT","NETWORK_PINNING_MISSING","MANIFEST_CLEARTEXT","NETWORK_NSC_*"] },
+  { code:"M6",  name:"Inadequate Privacy Controls",       items:["LOG_SENSITIVE_LITERAL","LOG_PRINT_STACKTRACE","TAINT_LOCATION_TO_*","TAINT_DEVICE_ID_TO_*","TAINT_CONTACT_TO_*","PRIVACY_*"] },
+  { code:"M7",  name:"Insufficient Binary Protections",   items:["MANIFEST_DEBUGGABLE","WEBVIEW_REMOTE_DEBUG","NATIVE_NO_PIE","NATIVE_NO_NX","NATIVE_NO_RELRO","NATIVE_NO_STACK_CANARY","NATIVE_DEBUG_SYMBOLS","ANTIANALYSIS_*","OBFUSC_REFLECTION_*"] },
+  { code:"M8",  name:"Security Misconfiguration",         items:["MANIFEST_EXPORTED_*","MANIFEST_PROVIDER_GRANT_URI","MANIFEST_CUSTOM_PERMISSION_NORMAL","MANIFEST_TARGET_SDK_LOW","MANIFEST_NSC_MISSING","INTENT_STICKY_BROADCAST","INTENT_REDIRECTION","STORAGE_BACKUP_ENABLED"] },
+  { code:"M9",  name:"Insecure Data Storage",             items:["STORAGE_PREFS_PLAINTEXT","STORAGE_SQLITE_PLAINTEXT","STORAGE_WORLD_READABLE","STORAGE_EXTERNAL_PUBLIC","STORAGE_EXTERNAL_ISOLATED"] },
+  { code:"M10", name:"Insufficient Cryptography",         items:["CRYPTO_WEAK_ALGORITHM","CRYPTO_WEAK_HASH","CRYPTO_ECB_MODE","CRYPTO_STATIC_IV","CRYPTO_INSECURE_RANDOM","CRYPTO_NO_PADDING","CRYPTO_SMALL_KEY","CRYPTO_KEYSTORE_BYPASS"] },
+];
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                           Tab navigation                                 ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+document.querySelectorAll(".nav-item").forEach(el => {
+  el.addEventListener("click", () => {
+    if (el.classList.contains("disabled")) return;
+    goTo(el.dataset.tab);
+  });
+});
+
+function goTo(tab) {
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === `tab-${tab}`));
+  document.getElementById("crumb").innerHTML = `<b>${tab.charAt(0).toUpperCase()+tab.slice(1)}</b>`;
+  if (tab === "dashboard") loadDashboard();
+  if (tab === "history") loadHistory();
+  if (tab === "coverage") renderCoverage();
+}
+
+function unlockResultTabs() {
+  document.querySelectorAll(".nav-item.disabled").forEach(n => n.classList.remove("disabled"));
+  ["btn-export-html","btn-export-json","btn-export-sarif","btn-print"].forEach(id =>
+    document.getElementById(id).disabled = false
+  );
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                        File / scan submission                            ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+document.getElementById("file-input").addEventListener("change", e => {
+  const f = e.target.files[0]; if (f) selectFile(f);
+});
+document.getElementById("file-remove").addEventListener("click", e => {
+  e.stopPropagation(); resetUI();
+});
+
+const dz = document.getElementById("dropzone");
+["dragenter","dragover"].forEach(ev =>
+  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add("drag-over"); }));
+["dragleave","drop"].forEach(ev =>
+  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove("drag-over"); }));
+dz.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) selectFile(f); });
+
+function selectFile(f) {
+  if (!f.name.toLowerCase().endsWith(".apk")) { showToast("Please choose a valid .apk file."); return; }
+  STATE.selectedFile = f;
+  document.getElementById("chip-name").textContent = f.name;
+  document.getElementById("chip-size").textContent = formatBytes(f.size);
+  document.getElementById("file-chip").classList.add("show");
+  document.getElementById("dropzone").style.display = "none";
+  document.getElementById("options-panel").classList.add("show");
+  document.getElementById("scan-btn").disabled = false;
+}
+
+function resetUI() {
+  STATE.selectedFile = null;
+  document.getElementById("file-chip").classList.remove("show");
+  document.getElementById("dropzone").style.display = "";
+  document.getElementById("options-panel").classList.remove("show");
+  document.getElementById("scan-btn").disabled = true;
+  document.getElementById("file-input").value = "";
+  document.getElementById("error-view").classList.remove("show");
+  document.getElementById("upload-stage").style.display = "flex";
+  document.getElementById("progress-view").style.display = "none";
+}
+
+document.getElementById("scan-btn").addEventListener("click", startScan);
+
+async function startScan() {
+  if (!STATE.selectedFile) return;
+
+  const fd = new FormData();
+  fd.append("apk", STATE.selectedFile);
+  fd.append("confidence", document.getElementById("opt-confidence").value);
+  fd.append("taint_depth", document.getElementById("opt-depth").value);
+
+  initStages();
+  document.getElementById("upload-stage").style.display = "none";
+  document.getElementById("progress-view").style.display = "block";
+  document.getElementById("progress-view").classList.add("show");
+
+  try {
+    const res = await fetch("/scan", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    STATE.scanId = data.scan_id;
+    streamProgress(STATE.scanId);
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function streamProgress(scanId) {
+  const es = new EventSource(`/progress/${scanId}`);
+  let lastStage = null;
+
+  es.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "ping") return;
+
+    if (msg.type === "progress") {
+      document.getElementById("prog-stage").textContent = msg.stage;
+      document.getElementById("prog-detail").textContent = msg.detail || "";
+      document.getElementById("prog-bar").style.width = (msg.pct || 0) + "%";
+      if (lastStage && lastStage !== msg.stage) markStage(lastStage, "done");
+      markStage(msg.stage, "active");
+      lastStage = msg.stage;
+    } else if (msg.type === "done") {
+      es.close();
+      if (lastStage) markStage(lastStage, "done");
+      markStage("Complete", "done");
+      document.getElementById("prog-bar").style.width = "100%";
+      setTimeout(() => fetch(`/result/${scanId}`).then(r => r.json()).then(report => {
+        STATE.report = report;
+        unlockResultTabs();
+        renderResult(report);
+        goTo("overview");
+      }).catch(err => showError(err.message)), 600);
+    } else if (msg.type === "error") {
+      es.close();
+      showError(msg.message);
+    }
+  };
+  es.onerror = () => { es.close(); showError("Connection lost. Please try again."); };
+}
+
+function showError(msg) {
+  document.getElementById("upload-stage").style.display = "flex";
+  document.getElementById("progress-view").style.display = "none";
+  document.getElementById("error-view").classList.add("show");
+  document.getElementById("error-msg").textContent = msg;
+  goTo("scan");
+}
+
+// ── Stage timeline ─────────────────────────────────────────────────────────
+function initStages() {
+  document.getElementById("stages-list").innerHTML = STAGE_NAMES.map(name => `
+    <div class="stage-item" id="stage-${slugify(name)}">
+      <div class="stage-dot"></div><span>${name}</span>
+    </div>`).join("");
+}
+function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,"-"); }
+function markStage(stageName, state) {
+  STAGE_NAMES.forEach(s => {
+    if (stageName.includes(s) || s.includes(stageName)) {
+      const e = document.getElementById(`stage-${slugify(s)}`);
+      if (e && !e.classList.contains("done")) {
+        e.classList.remove("active","done"); e.classList.add(state);
+      }
+    }
+  });
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                           Result rendering                               ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+function renderResult(report) {
+  const { metadata, summary, findings } = report;
+
+  // Overview header
+  document.getElementById("ov-title").textContent =
+    `${metadata.package || "Unknown App"} — ${findings.length} findings`;
+  document.getElementById("ov-sub").textContent =
+    `Target SDK ${metadata.target_sdk ?? "?"} · Min SDK ${metadata.min_sdk ?? "?"} · ` +
+    `${metadata.analysis_duration_seconds}s analysis · ${(metadata.permissions||[]).length} permissions declared`;
+
+  // Sidebar badges
+  document.getElementById("badge-total").textContent = findings.length;
+  document.getElementById("badge-findings").textContent = findings.length;
+  document.getElementById("badge-perms").textContent = (metadata.dangerous_permissions||[]).length;
+
+  renderRiskGauge(summary);
+  renderOverviewKPIs(summary);
+  renderOverviewCharts(summary);
+  renderTopFindings(findings);
+  renderFiltersData(findings, summary);
+  renderFindings();
+  renderMASVS(summary);
+  renderPermissions(metadata);
+  renderManifest(metadata);
+  renderComponents(metadata);
+}
+
+function renderRiskGauge(summary) {
+  const grade = summary.risk_grade || "?";
+  const arc = document.getElementById("gauge-arc");
+  const map = { A: 0.05, B: 0.25, C: 0.50, D: 0.75, F: 0.95, "?":0 };
+  const ratio = map[grade] ?? 0;
+  const circ = 2 * Math.PI * 42;
+  arc.setAttribute("stroke-dasharray", `${(ratio*circ).toFixed(1)} ${circ.toFixed(1)}`);
+  const stroke = grade === "A" ? "#22c55e" :
+                 grade === "B" ? "#34d399" :
+                 grade === "C" ? "#eab308" :
+                 grade === "D" ? "#f97316" :
+                 grade === "F" ? "#ef4444" : "#6c7891";
+  arc.setAttribute("stroke", stroke);
+  const el = document.getElementById("gauge-grade");
+  el.textContent = grade;
+  el.className = "gauge-grade " + grade;
+  document.getElementById("gauge-level").textContent =
+    grade === "F" ? "Critical risk" : grade === "D" ? "High risk" :
+    grade === "C" ? "Moderate risk" : grade === "B" ? "Low risk" :
+    grade === "A" ? "Minimal risk" : "—";
+  document.getElementById("gauge-desc").textContent =
+    `${summary.total} total findings · ${summary.by_severity?.CRITICAL||0} critical · `+
+    `${summary.by_severity?.HIGH||0} high · ${summary.by_severity?.MEDIUM||0} medium`;
+}
+
+function renderOverviewKPIs(summary) {
+  const sev = summary.by_severity || {};
+  document.getElementById("ov-kpi-critical").textContent = sev.CRITICAL || 0;
+  document.getElementById("ov-kpi-high").textContent = sev.HIGH || 0;
+  document.getElementById("ov-kpi-medium").textContent = sev.MEDIUM || 0;
+  document.getElementById("ov-kpi-low").textContent = sev.LOW || 0;
+  document.getElementById("ov-kpi-total").textContent = summary.total || 0;
+}
+
+function renderOverviewCharts(summary) {
+  destroyCharts(["ov-severity","ov-category","ov-owasp"]);
+  const sev = summary.by_severity || {};
+  STATE.charts["ov-severity"] = makeDoughnut("ov-severity",
+    ["Critical","High","Medium","Low","Info"],
+    [sev.CRITICAL||0, sev.HIGH||0, sev.MEDIUM||0, sev.LOW||0, sev.INFO||0],
+    [SEV_COLORS.CRITICAL,SEV_COLORS.HIGH,SEV_COLORS.MEDIUM,SEV_COLORS.LOW,SEV_COLORS.INFO]);
+
+  const cat = summary.by_category || {};
+  STATE.charts["ov-category"] = makeBar("ov-category",
+    Object.keys(cat), Object.values(cat), "#6366f1");
+
+  const ow = summary.by_owasp || {};
+  const labels = Object.keys(ow).sort();
+  STATE.charts["ov-owasp"] = makeBar("ov-owasp",
+    labels.map(l => l.split(":")[0]), labels.map(l => ow[l]), "#8b5cf6");
+}
+
+function renderTopFindings(findings) {
+  const top = [...findings]
+    .sort((a,b) => (SEV_RANK[b.severity]-SEV_RANK[a.severity]) || ((b.cvss||0)-(a.cvss||0)))
+    .slice(0, 5);
+  document.getElementById("ov-top-findings").innerHTML = top.length ?
+    top.map(f => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span class="sev-badge ${f.severity}">${f.severity}</span>
+        <div style="flex:1">
+          <div style="font-size:13.5px;font-weight:500">${escHtml(f.title)}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
+            ${f.cwe_id||""} ${f.cvss?"· CVSS "+f.cvss:""} · ${f.category}
+          </div>
+        </div>
+      </div>`).join("") :
+    `<div class="empty"><span class="emoji">✅</span>No findings — clean scan.</div>`;
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                          Findings tab                                    ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+function renderFiltersData(findings, summary) {
+  const cats = Object.keys(summary.by_category || {}).sort();
+  const catSel = document.getElementById("filter-category");
+  catSel.innerHTML = `<option value="ALL">All categories (${findings.length})</option>` +
+    cats.map(c => `<option value="${c}">${c} (${summary.by_category[c]})</option>`).join("");
+
+  const ows = Object.keys(summary.by_owasp || {}).sort();
+  const owSel = document.getElementById("filter-owasp");
+  owSel.innerHTML = `<option value="ALL">Any OWASP M-cat</option>` +
+    ows.map(o => `<option value="${o}">${o.split(':')[0]} — ${summary.by_owasp[o]} findings</option>`).join("");
+
+  // Wire all filters
+  ["filter-category","filter-confidence","filter-owasp","filter-sort"].forEach(id =>
+    document.getElementById(id).addEventListener("change", () => { syncFilters(); renderFindings(); }));
+
+  document.querySelectorAll('[data-filter="severity"]').forEach(b =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll('[data-filter="severity"]').forEach(x => x.classList.remove("active"));
+      b.classList.add("active"); STATE.filters.severity = b.dataset.val; renderFindings();
+    }));
+}
+
+function syncFilters() {
+  STATE.filters.category   = document.getElementById("filter-category").value;
+  STATE.filters.confidence = document.getElementById("filter-confidence").value;
+  STATE.filters.owasp      = document.getElementById("filter-owasp").value;
+  STATE.filters.sort       = document.getElementById("filter-sort").value;
+}
+
+function renderFindings() {
+  if (!STATE.report) return;
+  const f = STATE.filters;
+  let list = STATE.report.findings.slice();
+  if (f.severity   !== "ALL") list = list.filter(x => x.severity === f.severity);
+  if (f.category   !== "ALL") list = list.filter(x => x.category === f.category);
+  if (f.confidence !== "ALL") list = list.filter(x => x.confidence === f.confidence);
+  if (f.owasp      !== "ALL") list = list.filter(x => x.owasp_category === f.owasp);
+  if (f.search) {
+    const q = f.search.toLowerCase();
+    list = list.filter(x =>
+      (x.title||"").toLowerCase().includes(q) ||
+      (x.description||"").toLowerCase().includes(q) ||
+      (x.evidence||"").toLowerCase().includes(q) ||
+      (x.cwe_id||"").toLowerCase().includes(q) ||
+      (x.rule_id||"").toLowerCase().includes(q) ||
+      (x.category||"").toLowerCase().includes(q));
+  }
+
+  if (f.sort === "severity")        list.sort((a,b) => (SEV_RANK[b.severity]||0) - (SEV_RANK[a.severity]||0));
+  else if (f.sort === "confidence") list.sort((a,b) => (CONF_RANK[b.confidence]||0) - (CONF_RANK[a.confidence]||0));
+  else if (f.sort === "cvss")       list.sort((a,b) => (b.cvss||0) - (a.cvss||0));
+  else if (f.sort === "category")   list.sort((a,b) => (a.category||"").localeCompare(b.category||""));
+
+  const c = document.getElementById("findings-container");
+  if (!list.length) {
+    c.innerHTML = `<div class="no-findings"><span class="emoji">✅</span>No findings match the current filter.</div>`;
+    return;
+  }
+  c.innerHTML = list.map((f,i) => renderFindingCard(f, i)).join("");
+}
+
+function renderFindingCard(f, i) {
+  const loc = f.location || {};
+  const tf = f.taint_flow;
+  const flowHtml = tf ? `
+    <div style="margin-top:14px">
+      <div class="d-label">Data flow path</div>
+      <div class="flow-box">
+        <span class="flow-src">▶ SOURCE: ${escHtml(tf.source.label)}</span><br>
+        <span style="color:var(--muted)">  @ ${escHtml(tf.source.method)}</span><br>
+        <span class="flow-arr">  ↓ ${tf.call_chain ? tf.call_chain.length : 0} call frame(s)</span><br>
+        <span class="flow-snk">■ SINK: ${escHtml(tf.sink.label)}</span><br>
+        <span style="color:var(--muted)">  @ ${escHtml(tf.sink.method)}</span>
+      </div>
+    </div>` : "";
+
+  return `
+  <div class="finding-card" id="fc-${i}" data-i="${i}">
+    <div class="finding-head" onclick="toggleFinding(${i})">
+      <span class="sev-badge ${f.severity}">${f.severity}</span>
+      <span class="finding-title-txt">${escHtml(f.title)}</span>
+      <span class="finding-meta-txt">
+        <span class="tag">${f.category}</span>
+        ${f.cwe_id ? `<span class="tag cwe">${f.cwe_id}</span>` : ""}
+        ${f.cvss ? `<span class="tag cvss">CVSS ${f.cvss}</span>` : ""}
+        ${f.owasp_category ? `<span class="tag owasp">${escHtml(f.owasp_category.split(':')[0])}</span>` : ""}
+      </span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="finding-body">
+      <div class="detail-grid">
+        <div>
+          <div class="d-label">Description</div>
+          <div class="d-value">${escHtml(f.description)}</div>
+
+          <div class="d-label" style="margin-top:14px">Location</div>
+          <div class="d-value" style="font-family:'JetBrains Mono',monospace;font-size:12px">
+            ${escHtml(loc.class || "")}<br>
+            <span style="color:var(--accent)">→ ${escHtml(loc.method || "")}</span><br>
+            ${loc.file ? `<span style="color:var(--muted)">${escHtml(loc.file)}${loc.line ? ":"+loc.line : ""}</span>` : ""}
+          </div>
+          ${flowHtml}
+
+          <div class="tags-row">
+            <span class="tag">${f.rule_id}</span>
+            <span class="tag">${f.confidence} confidence</span>
+            ${f.owasp_category ? `<span class="tag owasp">${escHtml(f.owasp_category)}</span>` : ""}
+            ${f.cvss_vector ? `<span class="tag">${escHtml(f.cvss_vector)}</span>` : ""}
+          </div>
+        </div>
+        <div>
+          <div class="d-label">Evidence</div>
+          <pre class="evidence">${escHtml(f.evidence || "—")}</pre>
+
+          <div class="d-label" style="margin-top:14px">Remediation</div>
+          <div class="remediation-box">${escHtml(f.remediation || "—")}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleFinding(i) {
+  document.getElementById(`fc-${i}`).classList.toggle("open");
+}
+
+function onGlobalSearch(val) {
+  STATE.filters.search = val.trim();
+  if (STATE.report) {
+    renderFindings();
+    if (val.trim() && document.getElementById("tab-findings").classList.contains("active") === false) {
+      goTo("findings");
+    }
+  }
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                          MASVS / OWASP                                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+function renderMASVS(summary) {
+  const counts = summary.by_owasp || {};
+  const grid = document.getElementById("masvs-grid");
+  grid.innerHTML = COVERAGE_DOC.map(c => {
+    const fullCat = `${c.code}: ${c.name}`;
+    // Try to find a matching key; the backend uses full strings as keys
+    let n = 0;
+    for (const k of Object.keys(counts)) if (k.startsWith(c.code+":")) n += counts[k];
+    const cls = n === 0 ? "clean" : n >= 3 ? "has-issue" : "minor-issue";
+    const status = n === 0 ? "PASS" : n >= 3 ? "FAIL" : "REVIEW";
+    return `
+      <div class="masvs-card ${cls}">
+        <div class="accent-bar"></div>
+        <div class="code">${c.code}</div>
+        <div class="title">${c.name}</div>
+        <div class="count-row">
+          <div class="count">${n}</div>
+          <div>
+            <div class="status">${status}</div>
+            <div style="font-size:11px;color:var(--muted)">${n===1?"finding":"findings"}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                       Permissions / Manifest                             ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+const PERM_ICONS = {
+  CAMERA:"📷", LOCATION:"📍", FINE_LOCATION:"📍", COARSE_LOCATION:"📍",
+  CONTACTS:"👥", SMS:"💬", PHONE:"📞", STORAGE:"💾", AUDIO:"🎤",
+  RECORD:"🎤", CALENDAR:"📅", CALL:"📞", BLUETOOTH:"📶", BIOMETRIC:"🔒",
+  SENSOR:"🌡️", NOTIFICATION:"🔔", BACKGROUND:"🌙", ACCOUNT:"👤", BODY:"💪",
+};
+function permIcon(name) {
+  for (const k of Object.keys(PERM_ICONS))
+    if (name.toUpperCase().includes(k)) return PERM_ICONS[k];
+  return "🔑";
+}
+
+function renderPermissions(metadata) {
+  const dangerous = metadata.dangerous_permissions || [];
+  const all = metadata.permissions || [];
+  document.getElementById("perm-dangerous-count").textContent = dangerous.length;
+  document.getElementById("perm-all-count").textContent = all.length;
+
+  document.getElementById("perm-dangerous").innerHTML = dangerous.length ?
+    dangerous.map(p => `
+      <div class="perm-pill dangerous">
+        <span class="icon">${permIcon(p)}</span>
+        <span class="name">${p.replace("android.permission.","")}</span>
+        <span class="level">DANGEROUS</span>
+      </div>`).join("") :
+    `<div class="empty"><span class="emoji">✅</span>No dangerous permissions declared.</div>`;
+
+  document.getElementById("perm-all").innerHTML = all.length ?
+    all.map(p => {
+      const isDangerous = dangerous.includes(p);
+      return `
+      <div class="perm-pill ${isDangerous?'dangerous':''}">
+        <span class="icon">${permIcon(p)}</span>
+        <span class="name">${p.replace("android.permission.","")}</span>
+        <span class="level">${isDangerous?"DANGEROUS":"NORMAL"}</span>
+      </div>`;
+    }).join("") :
+    `<div class="empty">No permissions declared.</div>`;
+}
+
+function flagYesNo(val) {
+  return val
+    ? `<span class="flag-yes">true</span>`
+    : `<span class="flag-no">false</span>`;
+}
+
+function renderManifest(metadata) {
+  const m = metadata;
+  document.getElementById("manifest-app").innerHTML = `
+    <dt>Package</dt><dd>${escHtml(m.package||"?")}</dd>
+    <dt>min SDK</dt><dd>${escHtml(String(m.min_sdk??"?"))}</dd>
+    <dt>target SDK</dt><dd>${escHtml(String(m.target_sdk??"?"))}</dd>
+    <dt>debuggable</dt><dd>${flagYesNo(m.debuggable===true)}</dd>
+    <dt>allowBackup</dt><dd>${flagYesNo(m.allow_backup===true)}</dd>
+    <dt>cleartextTraffic</dt><dd>${flagYesNo(m.uses_cleartext_traffic===true)}</dd>
+    <dt>networkSecurityConfig</dt><dd>${escHtml(m.network_security_config||"—")}</dd>
+    <dt>fullBackupContent</dt><dd>${escHtml(m.full_backup_content||"—")}</dd>
+    <dt>dataExtractionRules</dt><dd>${escHtml(m.data_extraction_rules||"—")}</dd>
+  `;
+
+  const cps = m.custom_permissions || [];
+  document.getElementById("manifest-custom").innerHTML = cps.length ?
+    `<div class="component-list">${cps.map(p => `
+      <div class="component-row ${(p.protectionLevel||"normal").toLowerCase().includes("normal")?"unprotected":""}">
+        ${escHtml(p.name)} · protectionLevel=${escHtml(p.protectionLevel||"normal")}
+      </div>`).join("")}</div>` :
+    `<div class="empty">No custom permissions declared.</div>`;
+}
+
+function renderComponents(metadata) {
+  const cont = document.getElementById("components-list");
+  const sections = [
+    ["exported_activities","Activities","🎬"],
+    ["exported_services","Services","⚙️"],
+    ["exported_receivers","Broadcast Receivers","📡"],
+    ["exported_providers","Content Providers","📂"],
+  ];
+  cont.innerHTML = sections.map(([k,label,emoji]) => {
+    const list = metadata[k] || [];
+    if (!list.length) return "";
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <h3>${emoji} ${label} <span class="info">${list.length} exported</span></h3>
+        <div class="component-list">
+          ${list.map(c => `
+            <div class="component-row ${c.permission?'':'unprotected'}">
+              ${escHtml(c.name)}
+              ${c.permission ? ` · 🔒 ${escHtml(c.permission)}` : ' · ⚠️ <b style="color:var(--critical)">no permission guard</b>'}
+              ${c.deep_links && c.deep_links.length ? ` · 🔗 ${c.deep_links.length} deeplink(s)` : ''}
+            </div>`).join("")}
+        </div>
+      </div>`;
+  }).filter(Boolean).join("") || `<div class="empty"><span class="emoji">✅</span>No exported components.</div>`;
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                     Dashboard / History / Coverage                       ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+async function loadDashboard() {
+  try {
+    const data = await fetch("/api/stats").then(r=>r.json());
+    document.getElementById("kpi-scans").textContent = data.total_scans;
+    document.getElementById("kpi-findings").textContent = data.total_findings;
+    document.getElementById("kpi-critical").textContent = data.by_severity.CRITICAL || 0;
+    document.getElementById("kpi-high").textContent = data.by_severity.HIGH || 0;
+    document.getElementById("badge-history").textContent = data.total_scans;
+
+    destroyCharts(["dash-severity","dash-owasp","dash-grade"]);
+    const sev = data.by_severity;
+    STATE.charts["dash-severity"] = makeDoughnut("dash-severity",
+      ["Critical","High","Medium","Low","Info"],
+      [sev.CRITICAL||0,sev.HIGH||0,sev.MEDIUM||0,sev.LOW||0,sev.INFO||0],
+      [SEV_COLORS.CRITICAL,SEV_COLORS.HIGH,SEV_COLORS.MEDIUM,SEV_COLORS.LOW,SEV_COLORS.INFO]);
+
+    const ow = data.by_owasp || {};
+    const owLabels = Object.keys(ow).sort();
+    STATE.charts["dash-owasp"] = makeBar("dash-owasp",
+      owLabels.map(l => l.split(":")[0]),
+      owLabels.map(l => ow[l]), "#8b5cf6");
+
+    const gr = data.by_grade || {};
+    const gradeOrder = ["A","B","C","D","F"];
+    STATE.charts["dash-grade"] = makeBar("dash-grade",
+      gradeOrder, gradeOrder.map(g => gr[g] || 0),
+      ["#22c55e","#34d399","#eab308","#f97316","#ef4444"]);
+
+    document.getElementById("recent-scans").innerHTML = (data.recent || []).length ?
+      data.recent.map(r => `
+        <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer"
+             onclick="loadScanFromHistory('${r.scan_id}')">
+          <span class="grade-badge ${r.grade}">${r.grade}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.package)}</div>
+            <div style="font-size:11px;color:var(--muted)">${r.scanned_at}</div>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-2)">${r.total}</div>
+        </div>`).join("") :
+      `<div class="empty"><span class="emoji">📭</span>No scans yet — start a new scan to populate the dashboard.</div>`;
+  } catch (e) {
+    document.getElementById("recent-scans").innerHTML = `<div class="empty">Unable to load stats: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadHistory() {
+  try {
+    const scans = await fetch("/api/scans").then(r=>r.json());
+    const container = document.getElementById("history-table");
+    if (!scans.length) {
+      container.innerHTML = `<div class="empty"><span class="emoji">📭</span>No scans yet.</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <table class="history">
+        <thead><tr>
+          <th>Package</th><th>Risk</th><th>Total</th><th>C</th><th>H</th><th>M</th><th>L</th>
+          <th>SDK</th><th>Duration</th><th>Scanned</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+        ${scans.map(s => `
+          <tr>
+            <td><a href="javascript:void(0)" onclick="loadScanFromHistory('${s.scan_id}')">${escHtml(s.package)}</a><br>
+              <small style="color:var(--muted)">${escHtml(s.filename||"")}</small></td>
+            <td><span class="grade-badge ${s.grade}">${s.grade}</span></td>
+            <td><b>${s.total}</b></td>
+            <td style="color:var(--critical)">${s.critical}</td>
+            <td style="color:var(--high)">${s.high}</td>
+            <td style="color:var(--medium)">${s.medium}</td>
+            <td style="color:var(--low)">${s.low}</td>
+            <td>${s.target_sdk||"?"}</td>
+            <td>${s.duration}s</td>
+            <td>${s.scanned_at}</td>
+            <td>
+              <a class="btn btn-ghost" href="/report/${s.scan_id}" target="_blank">HTML</a>
+              <a class="btn btn-ghost" href="/download/${s.scan_id}">JSON</a>
+            </td>
+          </tr>`).join("")}
+        </tbody></table>`;
+  } catch (e) {
+    document.getElementById("history-table").innerHTML = `<div class="empty">Unable to load history.</div>`;
+  }
+}
+
+async function loadScanFromHistory(scanId) {
+  try {
+    const report = await fetch(`/result/${scanId}`).then(r=>r.json());
+    if (report.error) throw new Error(report.error);
+    STATE.report = report; STATE.scanId = scanId;
+    unlockResultTabs(); renderResult(report); goTo("overview");
+  } catch (e) { showToast("Failed to load scan: " + e.message); }
+}
+
+function renderCoverage() {
+  document.getElementById("coverage-grid").innerHTML = COVERAGE_DOC.map(c => `
+    <div class="masvs-card clean">
+      <div class="accent-bar"></div>
+      <div class="code">${c.code}</div>
+      <div class="title">${c.name}</div>
+      <div style="margin-top:10px;font-size:12px;color:var(--text-2);line-height:1.7">
+        ${c.items.map(i => `<span class="tag" style="margin-right:4px;margin-bottom:4px;display:inline-block">${i}</span>`).join("")}
+      </div>
+    </div>`).join("");
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                          Charts helpers                                  ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+function destroyCharts(ids) {
+  ids.forEach(id => { if (STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; } });
+}
+
+function chartBaseOpts() {
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ labels:{ color:"#aab4cc", font:{family:"Inter", size:12}, usePointStyle:true }}},
+    scales:{
+      x:{ ticks:{color:"#aab4cc",font:{family:"Inter",size:11}}, grid:{color:"rgba(255,255,255,0.04)"}},
+      y:{ ticks:{color:"#aab4cc",font:{family:"Inter",size:11}}, grid:{color:"rgba(255,255,255,0.04)"}},
+    },
+  };
+}
+
+function makeDoughnut(id, labels, data, colors) {
+  const ctx = document.getElementById(id).getContext("2d");
+  const opts = chartBaseOpts();
+  delete opts.scales;
+  return new Chart(ctx, {
+    type:"doughnut",
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderColor:"#101729", borderWidth:2 }]},
+    options:{...opts, cutout:"66%"},
+  });
+}
+
+function makeBar(id, labels, data, color) {
+  const ctx = document.getElementById(id).getContext("2d");
+  const colors = Array.isArray(color) ? color : labels.map(_ => color);
+  return new Chart(ctx, {
+    type:"bar",
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:6, borderSkipped:false }]},
+    options:{...chartBaseOpts(), plugins:{legend:{display:false}}},
+  });
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                          Misc helpers                                    ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+function escHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function formatBytes(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1024*1024) return (b/1024).toFixed(1) + " KB";
+  return (b/1024/1024).toFixed(1) + " MB";
+}
+function showToast(msg) {
+  const t = document.createElement("div");
+  t.textContent = msg;
+  t.style.cssText = `
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--surface-2);border:1px solid var(--border);
+    color:var(--text);padding:10px 18px;border-radius:8px;z-index:100;
+    box-shadow:var(--shadow);font-size:13.5px`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+function openHtmlReport() {
+  if (STATE.scanId) window.open(`/report/${STATE.scanId}`,"_blank");
+}
+function downloadJSON() {
+  if (STATE.scanId) window.location.href = `/download/${STATE.scanId}`;
+}
+function downloadSARIF() {
+  if (STATE.scanId) window.location.href = `/sarif/${STATE.scanId}`;
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                              Init                                        ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+loadDashboard();
+</script>
+</body>
+</html>

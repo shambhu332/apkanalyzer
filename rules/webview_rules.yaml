@@ -1,0 +1,109 @@
+rules:
+  - id: WEBVIEW_JS_INTERFACE_RCE
+    title: "addJavascriptInterface — potential RCE via reflection"
+    severity: CRITICAL
+    confidence: HIGH
+    cwe: CWE-749
+    cvss: 9.8
+    category: WEBVIEW
+    description: >
+      On Android < 4.2 (API 17), addJavascriptInterface allows JavaScript to
+      enumerate and invoke any public Java method via reflection, achieving RCE.
+      Even on modern APIs, malicious content can abuse exposed methods.
+    smali_pattern: 'WebView;->addJavascriptInterface'
+    remediation: >
+      Annotate all exposed methods with @JavascriptInterface (API >= 17).
+      Load only HTTPS-pinned, trusted content. Avoid exposing methods that
+      access sensitive APIs (file system, network, contacts).
+
+  - id: WEBVIEW_FILE_ACCESS_UNIVERSAL
+    title: "setAllowUniversalAccessFromFileURLs(true)"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-200
+    cvss: 7.5
+    category: WEBVIEW
+    description: >
+      Allows JavaScript in file:// pages to access any file:// URI, enabling
+      theft of app-private files if an attacker controls the loaded URL.
+    smali_pattern: 'setAllowUniversalAccessFromFileURLs'
+    remediation: "Set setAllowUniversalAccessFromFileURLs(false)."
+
+  - id: WEBVIEW_DEBUG_ENABLED
+    title: "setWebContentsDebuggingEnabled(true)"
+    severity: MEDIUM
+    confidence: HIGH
+    cwe: CWE-489
+    cvss: 5.5
+    category: WEBVIEW
+    description: >
+      Enables Chrome DevTools access to the WebView over USB, exposing
+      cookies, localStorage, and the JavaScript execution context.
+    smali_pattern: 'setWebContentsDebuggingEnabled'
+    remediation: "Guard with BuildConfig.DEBUG check."
+
+  - id: WEBVIEW_MIXED_CONTENT_ALWAYS_ALLOW
+    title: "WebView setMixedContentMode(MIXED_CONTENT_ALWAYS_ALLOW)"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-319
+    cvss: 7.4
+    category: WEBVIEW
+    description: >
+      MIXED_CONTENT_ALWAYS_ALLOW (value 0) lets HTTPS pages load HTTP subresources,
+      which subverts TLS guarantees for the embedding page.
+    smali_pattern: 'setMixedContentMode.*const/4 v\d+, 0x0'
+    remediation: 'Use MIXED_CONTENT_NEVER_ALLOW (1) for production builds.'
+
+  - id: WEBVIEW_FILE_ACCESS_FROM_FILE_URLS
+    title: "setAllowFileAccessFromFileURLs(true)"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-200
+    cvss: 7.0
+    category: WEBVIEW
+    description: >
+      Allows JavaScript loaded from a file:// URI to read other file:// resources,
+      enabling exfiltration of app-private files.
+    smali_pattern: 'setAllowFileAccessFromFileURLs'
+    remediation: 'Set setAllowFileAccessFromFileURLs(false). On API 30+ the default is already false.'
+
+  - id: WEBVIEW_GEOLOCATION_AUTO_GRANT
+    title: "WebView GeolocationPermissions auto-grants any origin"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-280
+    cvss: 5.4
+    category: WEBVIEW
+    description: >
+      A GeolocationPermissions.Callback that calls invoke(true) without checking
+      the origin grants location to any web page loaded in the WebView.
+    smali_pattern: 'GeolocationPermissions\$Callback;->invoke\(Ljava/lang/String;ZZ\)V'
+    remediation: 'Compare the origin to a small allow-list before granting.'
+
+  - id: WEBVIEW_LOAD_DATA_INJECTION
+    title: "WebView.loadData with HTML directly from variable"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-79
+    cvss: 5.3
+    category: WEBVIEW
+    description: >
+      Calling loadData/loadDataWithBaseURL with attacker-influenced HTML
+      enables stored or reflected XSS inside the WebView, which can chain
+      with addJavascriptInterface for full app compromise.
+    smali_pattern: 'WebView;->loadData(WithBaseURL)?'
+    remediation: "HTML-escape any untrusted content before injection, or render via a templating layer."
+
+  - id: WEBVIEW_USER_AGENT_LEAK
+    title: "Custom WebView User-Agent appends unique device identifier"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-359
+    cvss: 4.3
+    category: WEBVIEW
+    description: >
+      Concatenating a device id, IMEI, or advertising id into the WebView
+      User-Agent fingerprints every visited site with that identifier.
+    smali_pattern: 'WebSettings;->setUserAgentString'
+    remediation: 'Keep the default User-Agent or use only opaque, rotating session identifiers.'

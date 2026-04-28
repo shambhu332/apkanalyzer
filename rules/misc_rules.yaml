@@ -1,0 +1,116 @@
+# Miscellaneous dangerous-API rules. These don't fit cleanly into the
+# crypto/network/storage/webview buckets but are commonly cited in MASVS L1/L2.
+
+rules:
+  - id: DANGEROUS_DEX_CLASS_LOADER
+    title: "Dynamic DEX loading via DexClassLoader / PathClassLoader"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-94
+    cvss: 7.4
+    category: OBFUSCATION
+    description: >
+      Loading code from external DEX/JAR at runtime defeats static analysis
+      and code signing, and is a common malware persistence mechanism.
+    smali_pattern: 'Ldalvik/system/(DexClassLoader|PathClassLoader|InMemoryDexClassLoader)'
+    remediation: "Bundle all required code in the APK and rely on standard class loading."
+
+  - id: DANGEROUS_RUNTIME_EXEC
+    title: "Runtime.exec() invocation — potential command injection"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-78
+    cvss: 7.8
+    category: GENERAL
+    description: >
+      Passing attacker-influenced data into Runtime.exec or ProcessBuilder
+      enables command injection via shell metacharacters when invoked through
+      a shell, and arbitrary binary execution otherwise.
+    smali_pattern: 'Runtime;->exec'
+    remediation: >
+      Pass an argument array (not a single string), and refuse to invoke
+      shell wrappers (sh -c, bash -c). Validate all arguments against an
+      allow-list.
+
+  - id: DANGEROUS_PROCESSBUILDER
+    title: "ProcessBuilder used to spawn subprocess"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-78
+    cvss: 7.8
+    category: GENERAL
+    description: >
+      Same risks as Runtime.exec — taint flowing into ProcessBuilder.command()
+      can lead to arbitrary command execution.
+    smali_pattern: 'Ljava/lang/ProcessBuilder;'
+    remediation: "Use a fixed argument array and validate inputs."
+
+  - id: INSECURE_RANDOM
+    title: "java.util.Random used in security-sensitive context"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-330
+    cvss: 5.3
+    category: CRYPTO
+    description: >
+      java.util.Random is a non-cryptographic LCG. Its output is predictable
+      from any 624 consecutive 32-bit words. It must not be used for tokens,
+      session IDs, or salts.
+    smali_pattern: 'Ljava/util/Random;-><init>'
+    remediation: "Use java.security.SecureRandom for any value that protects a security boundary."
+
+  - id: LOG_SENSITIVE_KEYWORD
+    title: "Log statement may contain sensitive keyword (password/token/secret)"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-532
+    cvss: 4.3
+    category: PRIVACY
+    description: >
+      A Log call near a string containing 'password', 'token', 'secret',
+      'jwt', or 'apiKey' may leak credentials to logcat. logcat is readable
+      by any app with READ_LOGS on Android < 4.1 and recoverable from bug
+      reports / crash uploads on all versions.
+    smali_pattern: 'Landroid/util/Log;->\w.*(?i:password|token|secret|jwt|apikey|api_key|authorization)'
+    remediation: "Remove the log line or replace the value with a redacted placeholder."
+
+  - id: DANGEROUS_SETUSESCONNECT_INSECURE
+    title: "setUseInsecureConnection / similar opt-out"
+    severity: HIGH
+    confidence: LOW
+    cwe: CWE-295
+    cvss: 6.5
+    category: NETWORK
+    description: >
+      A setter named like setUseInsecureConnection / setSslDisabled is a
+      strong signal that TLS verification is being toggled off at runtime.
+    smali_pattern: 'setUseInsecure|setSslDisabled|setVerifySsl.*const/4 v\d+, 0x0'
+    remediation: "Remove the toggle; TLS verification must always be enabled."
+
+  - id: DANGEROUS_REFLECTION_INVOKE
+    title: "Reflection used to invoke a method by name"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-470
+    cvss: 3.7
+    category: OBFUSCATION
+    description: >
+      Method.invoke / Class.forName patterns are used both legitimately and
+      for code obfuscation. Combined with dynamic DEX loading or string
+      decryption they often hide malicious behaviour.
+    smali_pattern: 'Ljava/lang/reflect/Method;->invoke'
+    remediation: "Audit reflection sites for need; static dispatch is preferred where possible."
+
+  - id: DANGEROUS_NATIVE_LOAD
+    title: "System.loadLibrary / load with constructed path"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-426
+    cvss: 5.5
+    category: OBFUSCATION
+    description: >
+      Loading a native library from a path derived from runtime state
+      (rather than a constant resource name) can sideload attacker-controlled
+      code into the process.
+    smali_pattern: 'Ljava/lang/System;->load\('
+    remediation: "Prefer System.loadLibrary(\"name\") with a constant; reject paths read from external storage."

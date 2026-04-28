@@ -1,0 +1,151 @@
+# Cryptography vulnerability rules
+# These supplement the hardcoded detector logic with configurable rule definitions.
+# Format: each rule maps to a Finding that is synthesised by the rule engine
+# when the smali_pattern matches an instruction in a reachable method.
+
+rules:
+  - id: CRYPTO_ECB_MODE
+    title: "Cipher uses ECB mode"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-327
+    cvss: 7.5
+    category: CRYPTO
+    description: >
+      ECB mode encrypts identical plaintext blocks to identical ciphertext blocks,
+      leaking data patterns and providing no semantic security.
+    smali_pattern: 'Cipher;->getInstance.*"[Aa][Ee][Ss]/[Ee][Cc][Bb]'
+    remediation: "Use AES/GCM/NoPadding with a randomly generated 96-bit IV."
+
+  - id: CRYPTO_WEAK_DES
+    title: "DES/3DES cipher in use"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-327
+    cvss: 7.5
+    category: CRYPTO
+    description: >
+      DES has a 56-bit key (brute-forceable in hours) and 3DES is deprecated
+      as of NIST SP 800-131A (2019).
+    smali_pattern: 'Cipher;->getInstance.*"[Dd][Ee][Ss]'
+    remediation: "Replace with AES-256-GCM."
+
+  - id: CRYPTO_MD5_HASH
+    title: "MD5 used for security-sensitive hashing"
+    severity: MEDIUM
+    confidence: HIGH
+    cwe: CWE-328
+    cvss: 5.3
+    category: CRYPTO
+    description: >
+      MD5 is collision-broken (Wang et al., 2004) and pre-image attacks are
+      feasible. It must not be used for checksums, passwords, or signatures.
+    smali_pattern: 'MessageDigest;->getInstance.*"[Mm][Dd]5"'
+    remediation: "Use SHA-256 (general) or Argon2id (password hashing)."
+
+  - id: CRYPTO_SHA1_SIGNATURE
+    title: "SHA-1 used for hashing"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-328
+    cvss: 5.3
+    category: CRYPTO
+    description: >
+      SHA-1 is collision-broken (SHAttered, 2017) and deprecated by NIST
+      for all new applications.
+    smali_pattern: 'MessageDigest;->getInstance.*"[Ss][Hh][Aa]-?1"'
+    remediation: "Use SHA-256 or SHA-3."
+
+  - id: CRYPTO_STATIC_SEED_SECRANDOM
+    title: "SecureRandom seeded with constant value"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-336
+    cvss: 7.5
+    category: CRYPTO
+    description: >
+      Seeding SecureRandom with a fixed value makes its output deterministic
+      and reproducible by an attacker.
+    smali_pattern: 'SecureRandom;->setSeed'
+    remediation: "Remove setSeed(); Android's SecureRandom is properly seeded by the OS."
+
+  - id: CRYPTO_RSA_PKCS1_PADDING
+    title: "RSA cipher with PKCS1 padding (vulnerable to Bleichenbacher)"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-780
+    cvss: 7.4
+    category: CRYPTO
+    description: >
+      RSA/ECB/PKCS1Padding is vulnerable to Bleichenbacher / Manger attacks
+      that can recover the plaintext through repeated oracle queries. Use OAEP.
+    smali_pattern: 'Cipher;->getInstance.*"RSA/ECB/PKCS1Padding"'
+    remediation: 'Use "RSA/ECB/OAEPWithSHA-256AndMGF1Padding" instead.'
+
+  - id: CRYPTO_RSA_NO_PADDING
+    title: "RSA cipher with NoPadding (textbook RSA)"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-780
+    cvss: 7.5
+    category: CRYPTO
+    description: >
+      Textbook RSA (no padding) is deterministic and malleable; identical
+      plaintexts produce identical ciphertexts and chosen-plaintext attacks
+      become trivial.
+    smali_pattern: 'Cipher;->getInstance.*"RSA/.*?/NoPadding"'
+    remediation: 'Use OAEPWithSHA-256AndMGF1Padding.'
+
+  - id: CRYPTO_BLOWFISH
+    title: "Blowfish cipher in use"
+    severity: MEDIUM
+    confidence: HIGH
+    cwe: CWE-327
+    cvss: 5.9
+    category: CRYPTO
+    description: >
+      Blowfish has a 64-bit block size and is vulnerable to SWEET32 birthday
+      attacks once ~32 GiB of ciphertext is observed under a single key.
+    smali_pattern: 'Cipher;->getInstance.*"[Bb]lowfish'
+    remediation: 'Replace with AES-256-GCM.'
+
+  - id: CRYPTO_PBKDF2_LOW_ITERATIONS
+    title: "PBKDF2 with very few iterations"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-916
+    cvss: 5.0
+    category: CRYPTO
+    description: >
+      OWASP recommends >= 600,000 PBKDF2-HMAC-SHA256 iterations (2023 guidance).
+      Very low counts (under 10,000) make password cracking on commodity GPUs
+      essentially free.
+    smali_pattern: 'PBKDF2WithHmac|PBEKeySpec.*const/16 v\d+, 0x[0-9a-f]?[0-9a-f]?[0-9a-f]?\b'
+    remediation: 'Use Argon2id where possible, otherwise PBKDF2-HMAC-SHA256 with >= 600k iterations.'
+
+  - id: CRYPTO_HARDCODED_IV
+    title: "AES IV constructed from hardcoded byte array"
+    severity: HIGH
+    confidence: LOW
+    cwe: CWE-329
+    cvss: 6.8
+    category: CRYPTO
+    description: >
+      A fixed IV in CBC/GCM mode breaks semantic security: identical plaintexts
+      produce identical ciphertexts, and (for GCM) authenticator forgery becomes
+      possible after a single key-IV reuse.
+    smali_pattern: 'IvParameterSpec;-><init>\(\[B\)V'
+    remediation: 'Generate a fresh IV with SecureRandom for every encryption.'
+
+  - id: CRYPTO_BC_PROVIDER_KNOWN_BAD
+    title: "BouncyCastle 1.x provider with known CVEs in scope"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-1104
+    cvss: 5.3
+    category: CRYPTO
+    description: >
+      Bundled BouncyCastle versions older than 1.78 contain DSA / RSA timing
+      issues (CVE-2024-29857 et al.). Verify the version shipped with the APK.
+    smali_pattern: 'Lorg/bouncycastle/jce/provider/BouncyCastleProvider'
+    remediation: 'Update org.bouncycastle:bcprov-jdk18on to >= 1.78.'

@@ -1,0 +1,2558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APKAnalyzer Report — com.meesho.supply</title>
+<style>
+  :root {
+    --critical: #d63031; --high: #e17055; --medium: #fdcb6e;
+    --low: #00b894; --info: #74b9ff;
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 'Segoe UI', system-ui, sans-serif; }
+  a { color: #58a6ff; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 32px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .badge { border-radius: 8px; padding: 16px; text-align: center; border: 1px solid var(--border); }
+  .badge .count { font-size: 32px; font-weight: 700; }
+  .badge .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 4px; }
+  .badge.CRITICAL { border-color: var(--critical); color: var(--critical); }
+  .badge.HIGH { border-color: var(--high); color: var(--high); }
+  .badge.MEDIUM { border-color: var(--medium); color: var(--medium); }
+  .badge.LOW { border-color: var(--low); color: var(--low); }
+  .badge.TOTAL { border-color: var(--border); color: var(--text); }
+  .risk-grade { display:inline-flex; align-items:center; justify-content:center;
+                width:64px; height:64px; border-radius:50%; font-size:28px;
+                font-weight:800; border:3px solid; margin-right:16px; }
+  .risk-grade.A { border-color:var(--low); color:var(--low); }
+  .risk-grade.B { border-color:#00cec9; color:#00cec9; }
+  .risk-grade.C { border-color:var(--medium); color:var(--medium); }
+  .risk-grade.D { border-color:var(--high); color:var(--high); }
+  .risk-grade.F { border-color:var(--critical); color:var(--critical); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border);
+                background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
+  .filter-btn.active, .filter-btn:hover { background: var(--border); color: var(--text); }
+  .finding { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+             margin-bottom: 12px; overflow: hidden; }
+  .finding-header { padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+                    cursor: pointer; user-select: none; }
+  .finding-header:hover { background: rgba(255,255,255,0.03); }
+  .sev { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+         text-transform: uppercase; letter-spacing: .05em; min-width: 70px; text-align: center; }
+  .sev.CRITICAL { background: var(--critical); color: #fff; }
+  .sev.HIGH { background: var(--high); color: #fff; }
+  .sev.MEDIUM { background: var(--medium); color: #000; }
+  .sev.LOW { background: var(--low); color: #fff; }
+  .conf { font-size: 11px; color: var(--muted); }
+  .finding-title { flex: 1; font-weight: 500; }
+  .finding-body { padding: 16px; border-top: 1px solid var(--border); display: none; }
+  .finding-body.open { display: block; }
+  .finding-body .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field-label { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  pre { background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 10px;
+        font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .flow { font-size: 12px; color: var(--muted); }
+  .flow span { color: var(--text); }
+  .remediation { background: rgba(0,184,148,0.1); border: 1px solid var(--low);
+                 border-radius: 4px; padding: 10px; font-size: 13px; }
+  .perms { display: flex; flex-wrap: wrap; gap: 6px; }
+  .perm { font-size: 11px; background: var(--border); padding: 2px 8px; border-radius: 4px; }
+  .perm.danger { background: rgba(214,48,49,0.2); color: var(--critical); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>APKAnalyzer Security Report</h1>
+  <div class="meta">
+    Package: <strong>com.meesho.supply</strong> &nbsp;|&nbsp;
+    Target SDK: 35 &nbsp;|&nbsp;
+    Min SDK: 21 &nbsp;|&nbsp;
+    Analysis: 67.79s
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Risk grade + summary -->
+  <div style="display:flex;align-items:center;margin-bottom:16px;">
+    <div class="risk-grade F" title="Overall Risk Grade">F</div>
+    <div>
+      <div style="font-size:13px;color:var(--muted);">Overall Risk Grade</div>
+      <div style="font-size:11px;color:var(--muted);">A=clean · B=low · C=medium · D=high · F=critical</div>
+    </div>
+  </div>
+
+  <!-- Summary badges -->
+  <div class="summary-grid">
+    <div class="badge TOTAL"><div class="count">45</div><div class="label">Total</div></div>
+    
+    <div class="badge CRITICAL">
+      <div class="count">0</div>
+      <div class="label">CRITICAL</div>
+    </div>
+    
+    <div class="badge HIGH">
+      <div class="count">4</div>
+      <div class="label">HIGH</div>
+    </div>
+    
+    <div class="badge MEDIUM">
+      <div class="count">41</div>
+      <div class="label">MEDIUM</div>
+    </div>
+    
+    <div class="badge LOW">
+      <div class="count">0</div>
+      <div class="label">LOW</div>
+    </div>
+    
+  </div>
+
+  <!-- Permissions -->
+  
+  <div style="margin-bottom:24px;">
+    <div class="field-label" style="margin-bottom:8px;">Dangerous Permissions</div>
+    <div class="perms">
+      
+      <span class="perm danger">android.permission.READ_SMS</span>
+      
+      <span class="perm danger">android.permission.READ_PHONE_STATE</span>
+      
+      <span class="perm danger">android.permission.ACCESS_FINE_LOCATION</span>
+      
+      <span class="perm danger">android.permission.WRITE_CONTACTS</span>
+      
+      <span class="perm danger">android.permission.WRITE_EXTERNAL_STORAGE</span>
+      
+      <span class="perm danger">android.permission.READ_CONTACTS</span>
+      
+      <span class="perm danger">android.permission.ACCESS_COARSE_LOCATION</span>
+      
+      <span class="perm danger">android.permission.READ_EXTERNAL_STORAGE</span>
+      
+      <span class="perm danger">android.permission.RECORD_AUDIO</span>
+      
+      <span class="perm danger">android.permission.SEND_SMS</span>
+      
+      
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_ATTRIBUTION</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_TOPICS</span>
+      
+      
+      
+      <span class="perm">android.permission.INTERNET</span>
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_NETWORK_STATE</span>
+      
+      
+      
+      
+      
+      <span class="perm">com.google.android.gms.permission.AD_ID</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.FOREGROUND_SERVICE</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_WIFI_STATE</span>
+      
+      
+      
+      <span class="perm">com.meesho.supply.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_AD_ID</span>
+      
+      
+      
+      <span class="perm">android.permission.FOREGROUND_SERVICE_DATA_SYNC</span>
+      
+      
+      
+      <span class="perm">android.permission.SCHEDULE_EXACT_ALARM</span>
+      
+      
+      
+      <span class="perm">android.permission.RECEIVE_BOOT_COMPLETED</span>
+      
+      
+      
+      
+      
+      <span class="perm">com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE</span>
+      
+      
+      
+      <span class="perm">android.permission.POST_NOTIFICATIONS</span>
+      
+      
+      
+      <span class="perm">android.permission.DETECT_SCREEN_CAPTURE</span>
+      
+      
+      
+      <span class="perm">android.permission.READ_BASIC_PHONE_STATE</span>
+      
+      
+      
+      <span class="perm">android.permission.BLUETOOTH</span>
+      
+      
+      
+      <span class="perm">android.permission.CHANGE_NETWORK_STATE</span>
+      
+      
+      
+      <span class="perm">android.permission.WAKE_LOCK</span>
+      
+      
+      
+      
+      
+      <span class="perm">com.huawei.appmarket.service.commondata.permission.GET_COMMON_DATA</span>
+      
+      
+      
+      
+      
+      <span class="perm">android.permission.REQUEST_FOREGROUND_SERVICE</span>
+      
+      
+      
+      <span class="perm">com.truecaller.permission.sdk.internal.read_account_state</span>
+      
+      
+      
+      <span class="perm">android.permission.VIBRATE</span>
+      
+      
+      
+      <span class="perm">android.permission.AUDIO_CAPTURE</span>
+      
+      
+      
+      <span class="perm">com.google.android.c2dm.permission.RECEIVE</span>
+      
+      
+      
+      <span class="perm">com.samsung.android.mapsagent.permission.READ_APP_INFO</span>
+      
+      
+      
+      <span class="perm">android.permission.MODIFY_AUDIO_SETTINGS</span>
+      
+      
+      
+      <span class="perm">android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE</span>
+      
+      
+      
+      <span class="perm">android.permission.READ_PHONE_NUMBERS</span>
+      
+      
+    </div>
+  </div>
+  
+
+  <!-- Charts row -->
+  <div style="display:grid;grid-template-columns:1fr 2fr 2fr;gap:16px;margin-bottom:24px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div class="field-label" style="margin-bottom:8px;">Severity</div>
+      <canvas id="sevChart" height="180"></canvas>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div class="field-label" style="margin-bottom:8px;">Category Breakdown</div>
+      <canvas id="catChart" height="180"></canvas>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div class="field-label" style="margin-bottom:8px;">OWASP Mobile Top 10</div>
+      <canvas id="owaspChart" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- Severity filter -->
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+    <span style="font-size:11px;color:var(--muted);text-transform:uppercase;">Severity:</span>
+    <button class="filter-btn sev-btn active" onclick="filterBySev('ALL',this)">All</button>
+    
+    
+    
+    
+    <button class="filter-btn sev-btn" onclick="filterBySev('HIGH',this)">HIGH (4)</button>
+    
+    
+    
+    <button class="filter-btn sev-btn" onclick="filterBySev('MEDIUM',this)">MEDIUM (41)</button>
+    
+    
+    
+    
+    
+    
+  </div>
+
+  <!-- Category filter -->
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+    <span style="font-size:11px;color:var(--muted);text-transform:uppercase;">Category:</span>
+    <button class="filter-btn cat-btn active" onclick="filterByCat('ALL',this)">All</button>
+    
+    <button class="filter-btn cat-btn" onclick="filterByCat('DEEPLINK', this)">DEEPLINK (9)</button>
+    
+    <button class="filter-btn cat-btn" onclick="filterByCat('MANIFEST', this)">MANIFEST (15)</button>
+    
+    <button class="filter-btn cat-btn" onclick="filterByCat('SECRETS', this)">SECRETS (8)</button>
+    
+    <button class="filter-btn cat-btn" onclick="filterByCat('SDK', this)">SDK (4)</button>
+    
+    <button class="filter-btn cat-btn" onclick="filterByCat('PRIVACY', this)">PRIVACY (9)</button>
+    
+  </div>
+
+  <!-- Toolbar: search + sort + expand -->
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+    <input id="search-input" type="text" placeholder="Search findings…"
+      style="background:var(--surface);border:1px solid var(--border);border-radius:6px;
+             padding:6px 12px;color:var(--text);font-size:13px;flex:1;min-width:200px;">
+    <span style="font-size:11px;color:var(--muted);">Sort by:</span>
+    <button class="filter-btn" onclick="sortFindings('severity')">Severity</button>
+    <button class="filter-btn" onclick="sortFindings('cvss')">CVSS</button>
+    <button class="filter-btn" onclick="sortFindings('confidence')">Confidence</button>
+    <button class="filter-btn" onclick="expandAll()">Expand all</button>
+    <button class="filter-btn" onclick="collapseAll()">Collapse all</button>
+  </div>
+
+  <!-- Findings -->
+  <div id="findings-list">
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="5.4">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Mixed custom and HTTP(S) schemes on Activity</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 5.4</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M8</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity registers both a custom URI scheme (@7F12008D) and http/https. An attacker can trigger the http/https handler by crafting a universal link while also exploiting the custom-scheme handler that lacks verification.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M8: Security Misconfiguration</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>schemes: [&#39;@7F12008D&#39;, &#39;https&#39;] on com.meesho.supply.main.TrampolineActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Separate http/https App Links from custom scheme handlers into distinct components. Ensure each uses appropriate verification (autoVerify for App Links, permission for custom).</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_MIXED_SCHEMES &nbsp;|&nbsp; CWE: CWE-939
+             &nbsp;|&nbsp; CVSS: 5.4
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: https://@7F12008B/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity matches any path under https://@7F12008B/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;https&#34; host=&#34;@7F12008B&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: @7F12008D://@7F1208E0/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity matches any path under @7F12008D://@7F1208E0/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;@7F12008D&#34; host=&#34;@7F1208E0&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: https://@7F120088/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity matches any path under https://@7F120088/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;https&#34; host=&#34;@7F120088&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: https://@7F12008A/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity matches any path under https://@7F12008A/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;https&#34; host=&#34;@7F12008A&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: https://@7F120089/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity matches any path under https://@7F120089/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;https&#34; host=&#34;@7F120089&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: juspay://com.meesho.supply/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>in.juspay.hypersdk.core.CustomtabResult matches any path under juspay://com.meesho.supply/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;juspay&#34; host=&#34;com.meesho.supply&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: juspayexternalapp://com.meesho.supply/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>in.juspay.hypersdk.core.RedirectResponseActivity matches any path under juspayexternalapp://com.meesho.supply/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;juspayexternalapp&#34; host=&#34;com.meesho.supply&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="DEEPLINK" data-severity="MEDIUM"
+       data-confidence="MEDIUM" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Deep link has no path restriction: fbconnect://cct.com.meesho.supply/*</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">DEEPLINK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M4</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.facebook.CustomTabActivity matches any path under fbconnect://cct.com.meesho.supply/. Without a pathPattern or pathPrefix, the entire URI space under this host is routed into the app, expanding the attack surface for parameter injection and open redirect.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M4: Insufficient Input/Output Validation</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>&lt;data scheme=&#34;fbconnect&#34; host=&#34;cct.com.meesho.supply&#34;&gt; (no path/pathPrefix/pathPattern)</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:pathPrefix or android:pathPattern to restrict which paths trigger this component.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: DEEPLINK_NO_PATH_CONSTRAINT &nbsp;|&nbsp; CWE: CWE-183
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.deeplinkresolver.SharedTextRedirectionActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.meesho.supply.main.deeplinkresolver.SharedTextRedirectionActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.MainActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.meesho.supply.main.MainActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.TrampolineActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.meesho.supply.main.TrampolineActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>io.verloop.sdk.ui.VerloopActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: io.verloop.sdk.ui.VerloopActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>in.juspay.hypersdk.core.CustomtabResult is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: in.juspay.hypersdk.core.CustomtabResult</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>in.juspay.hypersdk.core.RedirectResponseActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: in.juspay.hypersdk.core.RedirectResponseActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Activity without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.facebook.CustomTabActivity is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Activity: com.facebook.CustomTabActivity</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_ACTIVITY &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported Service without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.MyFcmService is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Service: com.meesho.pushnotify.MyFcmService</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_SERVICE &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.appsflyer.SingleInstallBroadcastReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.appsflyer.SingleInstallBroadcastReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.supply.main.AppUpdateReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.supply.main.AppUpdateReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.download.DownloadCompletionListener is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.download.DownloadCompletionListener</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.pullnotifications.br.PNPullAlarmReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.PNPullAlarmReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.pullnotifications.br.PNAlarmReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.PNAlarmReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.meesho.pushnotify.pullnotifications.br.RebootBroadcastReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.RebootBroadcastReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="MANIFEST" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="6.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Exported BroadcastReceiver without permission</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 6.5</span>
+      <span style="color:var(--muted);font-size:12px;">MANIFEST</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M3</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>com.otpless.autoread.main.OtplessAutoReadZeroTapReceiver is exported with no permission guard.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M3: Insecure Authentication/Authorization</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>BroadcastReceiver: com.otpless.autoread.main.OtplessAutoReadZeroTapReceiver</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Add android:permission or set android:exported=false.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: MANIFEST_EXPORTED_BROADCASTRECEIVER &nbsp;|&nbsp; CWE: CWE-926
+             &nbsp;|&nbsp; CVSS: 6.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: c103703e120ae8cc73c9248622f3cd1e</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 7e034df218060c9158c3e8564ca3bd79</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 07191610582e3960807a9a87fc2e93fe</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: b64daf3b5a73e07b1199d56f7e74f8b0</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 2576e2ed19331cc46187226867c950e1</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 0f95c44ce4ed36b99cf74657d4a911d5</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 8c5f929a3842b9a41e9fee00de008e64</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SECRETS" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Hardcoded High-entropy hex string (possible key/IV/seed) detected</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SECRETS</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M1</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            com.meesho.supply DEX
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M1: Improper Credential Usage</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Matched: 6c52af208a0fca07b81ffad88f5cc26f</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">If this is key material, move it to Android Keystore or a remote KMS.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SECRET_HIGH_ENTROPY_HEX &nbsp;|&nbsp; CWE: CWE-321
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SDK" data-severity="HIGH"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev HIGH">HIGH</span>
+      <span class="finding-title">Third-party SDK detected: AppsFlyer Attribution</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SDK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M2</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>AppsFlyer Attribution (TRACKING) is present in the APK. Known data collection: install source, device ID, revenue, in-app events. Third-party SDKs may collect and transmit user data independently of your privacy policy disclosures.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            DEX classes
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M2: Inadequate Supply Chain Security</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Class prefix detected: Lcom/appsflyer/</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Enable AppsFlyer privacy mode; implement consent flag.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SDK_APPSFLYER_ATTRIBUTION &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SDK" data-severity="HIGH"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev HIGH">HIGH</span>
+      <span class="finding-title">Third-party SDK detected: Facebook SDK (Login/Share)</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SDK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M2</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Facebook SDK (Login/Share) (SOCIAL) is present in the APK. Known data collection: user profile, friends list, app events, device info. Third-party SDKs may collect and transmit user data independently of your privacy policy disclosures.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            DEX classes
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M2: Inadequate Supply Chain Security</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Class prefix detected: Lcom/facebook/</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Use Facebook&#39;s Limited Login; disable automatic event logging.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SDK_FACEBOOK_SDK_LOGIN/SHARE &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SDK" data-severity="HIGH"
+       data-confidence="HIGH" data-cvss="7.5">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev HIGH">HIGH</span>
+      <span class="finding-title">Third-party SDK detected: Google Mobile Ads (AdMob)</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 7.5</span>
+      <span style="color:var(--muted);font-size:12px;">SDK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M2</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Google Mobile Ads (AdMob) (ADVERTISING) is present in the APK. Known data collection: device ID, location, browsing/app usage, advertising ID. Third-party SDKs may collect and transmit user data independently of your privacy policy disclosures.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            DEX classes
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M2: Inadequate Supply Chain Security</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Class prefix detected: Lcom/google/android/gms/ads/</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Review AdMob data sharing settings; request consent via UMP SDK.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SDK_GOOGLE_MOBILE_ADS_ADMOB &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 7.5
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="SDK" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="5.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Third-party SDK detected: Firebase Analytics</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 5.3</span>
+      <span style="color:var(--muted);font-size:12px;">SDK</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M2</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Firebase Analytics (ANALYTICS) is present in the APK. Known data collection: device ID, user events, demographics (if enabled). Third-party SDKs may collect and transmit user data independently of your privacy policy disclosures.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            DEX classes
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M2: Inadequate Supply Chain Security</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Class prefix detected: Lcom/google/firebase/analytics/</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Disable ad personalisation features if not needed; add GDPR consent check.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: SDK_FIREBASE_ANALYTICS &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 5.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: RECORD_AUDIO</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.RECORD_AUDIO grants access to Audio Files. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.RECORD_AUDIO</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Audio Files collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_RECORD_AUDIO &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: READ_PHONE_STATE</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.READ_PHONE_STATE grants access to Phone Number/Device ID. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.READ_PHONE_STATE</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Phone Number/Device ID collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_READ_PHONE_STATE &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: READ_SMS</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.READ_SMS grants access to SMS/MMS Messages. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.READ_SMS</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure SMS/MMS Messages collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_READ_SMS &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: READ_CONTACTS</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.READ_CONTACTS grants access to Contacts. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.READ_CONTACTS</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Contacts collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_READ_CONTACTS &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: ACCESS_FINE_LOCATION</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.ACCESS_FINE_LOCATION grants access to Precise Location. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.ACCESS_FINE_LOCATION</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Precise Location collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_ACCESS_FINE_LOCATION &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: READ_EXTERNAL_STORAGE</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.READ_EXTERNAL_STORAGE grants access to Files and Docs. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.READ_EXTERNAL_STORAGE</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Files and Docs collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_READ_EXTERNAL_STORAGE &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: WRITE_CONTACTS</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.WRITE_CONTACTS grants access to Contacts. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.WRITE_CONTACTS</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Contacts collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_WRITE_CONTACTS &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="MEDIUM"
+       data-confidence="HIGH" data-cvss="4.3">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev MEDIUM">MEDIUM</span>
+      <span class="finding-title">Dangerous permission requires Data Safety disclosure: ACCESS_COARSE_LOCATION</span>
+      <span class="conf">HIGH</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 4.3</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Permission android.permission.ACCESS_COARSE_LOCATION grants access to Approximate Location. Under GDPR Article 5, Google Play Data Safety policy, and CCPA, any collection of this data type must be disclosed in your privacy policy and Data Safety section.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Uses-permission: android.permission.ACCESS_COARSE_LOCATION</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Ensure Approximate Location collection is disclosed in your Privacy Policy and Google Play Data Safety section. Only collect what is necessary.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_PERM_ACCESS_COARSE_LOCATION &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 4.3
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="finding" data-category="PRIVACY" data-severity="HIGH"
+       data-confidence="MEDIUM" data-cvss="5.9">
+    <div class="finding-header" onclick="toggleBody(this)">
+      <span class="sev HIGH">HIGH</span>
+      <span class="finding-title">Location + network state combination enables device fingerprinting</span>
+      <span class="conf">MEDIUM</span>
+      <span style="font-size:11px;color:var(--muted);">CVSS 5.9</span>
+      <span style="color:var(--muted);font-size:12px;">PRIVACY</span>
+      <span style="font-size:10px;background:#30363d;padding:1px 6px;border-radius:4px;color:#a29bfe;">M6</span>
+    </div>
+    <div class="finding-body">
+      <div class="grid">
+        <div>
+          <div class="field-label">Description</div>
+          <p>Combining ACCESS_FINE_LOCATION with ACCESS_NETWORK_STATE allows building a highly unique device fingerprint (location + WiFi SSIDs + network topology). This goes beyond normal location access.</p>
+
+          <div class="field-label" style="margin-top:12px;">Location</div>
+          <p style="font-size:12px;font-family:monospace;">
+            →<br>
+            AndroidManifest.xml
+          </p>
+
+          
+
+          
+          <div class="field-label" style="margin-top:12px;">OWASP Mobile Top 10</div>
+          <p style="font-size:12px;color:#a29bfe;">M6: Inadequate Privacy Controls</p>
+          
+        </div>
+        <div>
+          <div class="field-label">Evidence</div>
+          <pre>Both ACCESS_FINE_LOCATION and ACCESS_NETWORK_STATE declared</pre>
+
+          <div class="field-label" style="margin-top:12px;">Remediation</div>
+          <div class="remediation">Justify why both permissions are required simultaneously. Avoid persisting or transmitting combined signals.</div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+            Rule: PRIVACY_NETWORK_STATE_COMBINED &nbsp;|&nbsp; CWE: CWE-359
+             &nbsp;|&nbsp; CVSS: 5.9
+            <br><span style="font-family:monospace;font-size:10px;">CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  </div>
+
+</div>
+
+<footer>Generated by APKAnalyzer &nbsp;·&nbsp; com.meesho.supply</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ── Charts ───────────────────────────────────────────────────────────────────
+(function() {
+  const SEV_COLORS = {
+    CRITICAL:'#d63031', HIGH:'#e17055', MEDIUM:'#fdcb6e', LOW:'#00b894', INFO:'#74b9ff'
+  };
+  const sevData = {&#34;CRITICAL&#34;: 0, &#34;HIGH&#34;: 4, &#34;MEDIUM&#34;: 41, &#34;LOW&#34;: 0, &#34;INFO&#34;: 0};
+  const catData = {&#34;DEEPLINK&#34;: 9, &#34;MANIFEST&#34;: 15, &#34;SECRETS&#34;: 8, &#34;SDK&#34;: 4, &#34;PRIVACY&#34;: 9};
+  const owaspData = {&#34;M8: Security Misconfiguration&#34;: 1, &#34;M4: Insufficient Input/Output Validation&#34;: 8, &#34;M3: Insecure Authentication/Authorization&#34;: 15, &#34;M1: Improper Credential Usage&#34;: 8, &#34;M2: Inadequate Supply Chain Security&#34;: 4, &#34;M6: Inadequate Privacy Controls&#34;: 9};
+  const confData = {&#34;HIGH&#34;: 36, &#34;MEDIUM&#34;: 9, &#34;LOW&#34;: 0};
+
+  // Severity donut
+  const sevCtx = document.getElementById('sevChart');
+  if (sevCtx) {
+    const labels = Object.keys(sevData).filter(k => sevData[k] > 0);
+    new Chart(sevCtx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets:[{ data: labels.map(l=>sevData[l]),
+          backgroundColor: labels.map(l=>SEV_COLORS[l]||'#999'), borderWidth:0 }]
+      },
+      options: { plugins:{ legend:{ labels:{ color:'#c9d1d9', font:{size:11} } } }, cutout:'65%' }
+    });
+  }
+
+  // Category bar
+  const catCtx = document.getElementById('catChart');
+  if (catCtx) {
+    const cats = Object.keys(catData);
+    new Chart(catCtx, {
+      type: 'bar',
+      data: {
+        labels: cats,
+        datasets:[{ label:'Findings', data: cats.map(c=>catData[c]),
+          backgroundColor:'#58a6ff', borderRadius:4 }]
+      },
+      options: {
+        indexAxis:'y',
+        plugins:{ legend:{display:false} },
+        scales:{
+          x:{ ticks:{color:'#8b949e'}, grid:{color:'#30363d'} },
+          y:{ ticks:{color:'#c9d1d9'} }
+        }
+      }
+    });
+  }
+
+  // OWASP bar
+  const owaspCtx = document.getElementById('owaspChart');
+  if (owaspCtx && Object.keys(owaspData).length) {
+    const cats = Object.keys(owaspData);
+    new Chart(owaspCtx, {
+      type: 'bar',
+      data: {
+        labels: cats.map(c => c.split(':')[0]),  // M1, M2 ...
+        datasets:[{ label:'Findings', data: cats.map(c=>owaspData[c]),
+          backgroundColor:'#a29bfe', borderRadius:4 }]
+      },
+      options: {
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{ title: items => cats[items[0].dataIndex] } } },
+        scales:{
+          x:{ ticks:{color:'#c9d1d9'}, grid:{color:'#30363d'} },
+          y:{ ticks:{color:'#8b949e'} }
+        }
+      }
+    });
+  }
+})();
+
+// ── Interactions ─────────────────────────────────────────────────────────────
+function toggleBody(header) {
+  header.nextElementSibling.classList.toggle('open');
+}
+
+let activeFilters = { sev: 'ALL', cat: 'ALL' };
+function applyFilters() {
+  document.querySelectorAll('.finding').forEach(f => {
+    const sevOk = activeFilters.sev === 'ALL' || f.dataset.severity === activeFilters.sev;
+    const catOk = activeFilters.cat === 'ALL' || f.dataset.category === activeFilters.cat;
+    f.style.display = (sevOk && catOk) ? '' : 'none';
+  });
+}
+function filterBySev(sev, btn) {
+  activeFilters.sev = sev;
+  document.querySelectorAll('.sev-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+function filterByCat(cat, btn) {
+  activeFilters.cat = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+// Sort findings
+function sortFindings(key) {
+  const container = document.getElementById('findings-list');
+  const items = [...container.querySelectorAll('.finding')];
+  const sevRank = {CRITICAL:5, HIGH:4, MEDIUM:3, LOW:2, INFO:1};
+  const confRank = {HIGH:3, MEDIUM:2, LOW:1};
+  items.sort((a, b) => {
+    if (key === 'severity') return (sevRank[b.dataset.severity]||0) - (sevRank[a.dataset.severity]||0);
+    if (key === 'confidence') return (confRank[b.dataset.confidence]||0) - (confRank[a.dataset.confidence]||0);
+    if (key === 'cvss') return parseFloat(b.dataset.cvss||0) - parseFloat(a.dataset.cvss||0);
+    return 0;
+  });
+  items.forEach(i => container.appendChild(i));
+}
+
+// Search
+document.getElementById('search-input').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('.finding').forEach(f => {
+    f.style.display = f.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+// Expand / collapse all
+function expandAll() { document.querySelectorAll('.finding-body').forEach(b => b.classList.add('open')); }
+function collapseAll() { document.querySelectorAll('.finding-body').forEach(b => b.classList.remove('open')); }
+</script>
+</body>
+</html>

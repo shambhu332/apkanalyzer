@@ -1,0 +1,498 @@
+{
+  "metadata": {
+    "apk_path": "/home/shambhu/Desktop/static/web/static/uploads/2d8dfc45-a662-4643-8550-14fd0bd39ab5.apk",
+    "filename": "2d8dfc45-a662-4643-8550-14fd0bd39ab5.apk",
+    "package": "com.meesho.supply",
+    "min_sdk": "21",
+    "target_sdk": "35",
+    "permissions": [
+      "com.google.android.c2dm.permission.RECEIVE",
+      "android.permission.READ_SMS",
+      "android.permission.DETECT_SCREEN_CAPTURE",
+      "android.permission.WRITE_CONTACTS",
+      "com.google.android.gms.permission.AD_ID",
+      "android.permission.SEND_SMS",
+      "android.permission.ACCESS_ADSERVICES_TOPICS",
+      "android.permission.VIBRATE",
+      "com.truecaller.permission.sdk.internal.read_account_state",
+      "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.SCHEDULE_EXACT_ALARM",
+      "android.permission.BLUETOOTH",
+      "android.permission.ACCESS_NETWORK_STATE",
+      "android.permission.WAKE_LOCK",
+      "android.permission.CHANGE_NETWORK_STATE",
+      "android.permission.ACCESS_WIFI_STATE",
+      "android.permission.REQUEST_FOREGROUND_SERVICE",
+      "android.permission.ACCESS_ADSERVICES_AD_ID",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE",
+      "android.permission.INTERNET",
+      "android.permission.READ_CONTACTS",
+      "android.permission.READ_BASIC_PHONE_STATE",
+      "com.huawei.appmarket.service.commondata.permission.GET_COMMON_DATA",
+      "android.permission.RECEIVE_BOOT_COMPLETED",
+      "android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
+      "com.samsung.android.mapsagent.permission.READ_APP_INFO",
+      "android.permission.READ_PHONE_STATE",
+      "android.permission.FOREGROUND_SERVICE",
+      "android.permission.MODIFY_AUDIO_SETTINGS",
+      "android.permission.RECORD_AUDIO",
+      "android.permission.AUDIO_CAPTURE",
+      "android.permission.ACCESS_COARSE_LOCATION",
+      "com.meesho.supply.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+      "android.permission.READ_PHONE_NUMBERS",
+      "android.permission.POST_NOTIFICATIONS"
+    ],
+    "dangerous_permissions": [
+      "android.permission.READ_SMS",
+      "android.permission.WRITE_CONTACTS",
+      "android.permission.SEND_SMS",
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.READ_CONTACTS",
+      "android.permission.READ_PHONE_STATE",
+      "android.permission.RECORD_AUDIO",
+      "android.permission.ACCESS_COARSE_LOCATION"
+    ],
+    "analysis_duration_seconds": 73.61
+  },
+  "summary": {
+    "total": 23,
+    "by_severity": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 23,
+      "LOW": 0,
+      "INFO": 0
+    },
+    "by_confidence": {
+      "HIGH": 23,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "by_category": {
+      "MANIFEST": 15,
+      "SECRETS": 8
+    }
+  },
+  "findings": [
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "com.meesho.supply.main.deeplinkresolver.SharedTextRedirectionActivity is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: com.meesho.supply.main.deeplinkresolver.SharedTextRedirectionActivity",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "com.meesho.supply.main.MainActivity is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: com.meesho.supply.main.MainActivity",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "com.meesho.supply.main.TrampolineActivity is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: com.meesho.supply.main.TrampolineActivity",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "io.verloop.sdk.ui.VerloopActivity is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: io.verloop.sdk.ui.VerloopActivity",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "in.juspay.hypersdk.core.CustomtabResult is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: in.juspay.hypersdk.core.CustomtabResult",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "in.juspay.hypersdk.core.RedirectResponseActivity is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: in.juspay.hypersdk.core.RedirectResponseActivity",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_ACTIVITY",
+      "title": "Exported Activity without permission",
+      "description": "com.facebook.CustomTabActivity is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Activity: com.facebook.CustomTabActivity",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_SERVICE",
+      "title": "Exported Service without permission",
+      "description": "com.meesho.pushnotify.MyFcmService is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "Service: com.meesho.pushnotify.MyFcmService",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.appsflyer.SingleInstallBroadcastReceiver is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.appsflyer.SingleInstallBroadcastReceiver",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.meesho.supply.main.AppUpdateReceiver is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.meesho.supply.main.AppUpdateReceiver",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.meesho.download.DownloadCompletionListener is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.meesho.download.DownloadCompletionListener",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.meesho.pushnotify.pullnotifications.br.PNPullAlarmReceiver is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.PNPullAlarmReceiver",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.meesho.pushnotify.pullnotifications.br.PNAlarmReceiver is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.PNAlarmReceiver",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.meesho.pushnotify.pullnotifications.br.RebootBroadcastReceiver is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.meesho.pushnotify.pullnotifications.br.RebootBroadcastReceiver",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "MANIFEST_EXPORTED_BROADCASTRECEIVER",
+      "title": "Exported BroadcastReceiver without permission",
+      "description": "com.otpless.autoread.main.OtplessAutoReadZeroTapReceiver is exported with no permission guard.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "MANIFEST",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "AndroidManifest.xml",
+        "line": 0
+      },
+      "evidence": "BroadcastReceiver: com.otpless.autoread.main.OtplessAutoReadZeroTapReceiver",
+      "remediation": "Add android:permission or set android:exported=false.",
+      "cwe_id": "CWE-926",
+      "cvss": 6.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: c103703e120ae8cc73c9248622f3cd1e",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: 7e034df218060c9158c3e8564ca3bd79",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: 07191610582e3960807a9a87fc2e93fe",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: b64daf3b5a73e07b1199d56f7e74f8b0",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: 2576e2ed19331cc46187226867c950e1",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: 0f95c44ce4ed36b99cf74657d4a911d5",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: 8c5f929a3842b9a41e9fee00de008e64",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    },
+    {
+      "rule_id": "SECRET_HIGH_ENTROPY_HEX",
+      "title": "Hardcoded High-entropy hex string (possible key/IV/seed) detected",
+      "description": "A High-entropy hex string (possible key/IV/seed) was found hardcoded in the APK. Hardcoded secrets embedded in APKs can be trivially extracted by decompiling the application.",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "category": "SECRETS",
+      "location": {
+        "class": "",
+        "method": "",
+        "file": "com.meesho.supply DEX",
+        "line": 0
+      },
+      "evidence": "Matched: 6c52af208a0fca07b81ffad88f5cc26f",
+      "remediation": "If this is key material, move it to Android Keystore or a remote KMS.",
+      "cwe_id": "CWE-321",
+      "cvss": 7.5
+    }
+  ]
+}
