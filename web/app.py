@@ -239,6 +239,8 @@ def start_scan():
 
     scan_id = str(uuid.uuid4())
     file_ext = Path(file.filename).suffix.lower() or ".apk"
+    # Sanitize filename once at ingress — used in SSE events and JSON responses
+    safe_filename = html.escape(Path(file.filename).name)
     apk_path = UPLOAD_DIR / f"{scan_id}{file_ext}"
     file.save(str(apk_path))
 
@@ -263,10 +265,10 @@ def start_scan():
             "queue": q,
             "report": None,
             "error": None,
-            "filename": file.filename,
+            "filename": safe_filename,
             "started_at": started_at,
         }
-    _store.insert(scan_id, file.filename, started_at)
+    _store.insert(scan_id, safe_filename, started_at)
 
     # Fast path: return cached result if same APK was scanned before
     try:
