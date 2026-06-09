@@ -297,14 +297,6 @@ class AnalysisPipeline:
             _notify("SBOM", "Building component inventory + CVE lookup", 82)
             self._findings.extend(self._run_sbom())
 
-            progress.update(task, description="Privacy compliance checks…")
-            _notify("Privacy Checks", "PII / location / advertising-id audit", 83)
-            self._findings.extend(self._run_privacy_checks())
-
-            progress.update(task, description="Anti-analysis detection…")
-            _notify("Anti-analysis", "Root / emulator / debugger checks", 86)
-            self._findings.extend(self._run_antianalysis_scan())
-
             progress.update(task, description="YAML rule engine…")
             _notify("Rule Engine", "Pattern-based safety net", 88)
             self._findings.extend(self._run_yaml_rules())
@@ -474,11 +466,9 @@ class AnalysisPipeline:
             local_intent = IntentDetector()
             local_logging = LoggingDetector()
             local_native = NativeDetector()
+            local_privacy = PrivacyDetector()
+            local_antiana = AntiAnalysisDetector()
             result: list[Finding] = []
-            # Detectors whose output is purely a function of the CFG +
-            # reg_strings are safe to cache. Crypto is intentionally
-            # excluded — its output depends on the global algorithm_index,
-            # which can change across runs even if the smali doesn't.
             result.extend(local_crypto.analyse(cfg, desc, reg_strings))
             result.extend(_run_with_cache(
                 local_network, "network", method_key,
@@ -504,6 +494,12 @@ class AnalysisPipeline:
             result.extend(_run_with_cache(
                 local_native, "native_method", method_key,
                 lambda: local_native.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_privacy, "privacy", method_key,
+                lambda: local_privacy.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_antiana, "antianalysis", method_key,
+                lambda: local_antiana.analyse_method(cfg, desc, reg_strings)))
             return result
 
         findings: list[Finding] = []
@@ -733,17 +729,14 @@ class AnalysisPipeline:
 
     def _run_privacy_checks(self) -> list[Finding]:
         detector = PrivacyDetector()
+        # Method-level privacy checks run in the parallel phase (_run_per_method_detectors).
+        # This method now only handles manifest-level privacy checks.
         findings: list[Finding] = []
-        for cfg, desc, rs in self._candidates:
-            findings.extend(detector.analyse_method(cfg, desc, rs))
         return findings
 
     def _run_antianalysis_scan(self) -> list[Finding]:
-        detector = AntiAnalysisDetector()
-        findings: list[Finding] = []
-        for cfg, desc, rs in self._candidates:
-            findings.extend(detector.analyse_method(cfg, desc, rs))
-        return findings
+        # Method-level anti-analysis checks run in the parallel phase.
+        return []
 
     def _run_yaml_rules(self) -> list[Finding]:
         """
