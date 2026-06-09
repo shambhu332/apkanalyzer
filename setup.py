@@ -1,4 +1,12 @@
+from pathlib import Path
 from setuptools import setup, find_packages
+
+# Single source of truth: requirements.txt drives both pip install and setup.py
+_reqs = [
+    line.strip()
+    for line in Path("requirements.txt").read_text().splitlines()
+    if line.strip() and not line.startswith("#")
+]
 
 setup(
     name="apkanalyzer",
@@ -6,18 +14,7 @@ setup(
     description="Advanced static analysis engine for Android APKs",
     packages=find_packages(),
     python_requires=">=3.10",
-    install_requires=[
-        "androguard>=3.3.5,<5.0",
-        "lxml>=4.9.0",
-        "pyyaml>=6.0",
-        "networkx>=3.0",
-        "jinja2>=3.1.0",
-        "click>=8.1.0",
-        "rich>=13.0.0",
-        "requests>=2.28.0",
-        "packaging>=23.0",
-        "python-magic>=0.4.27",
-    ],
+    install_requires=_reqs,
     entry_points={
         "console_scripts": [
             "apkanalyzer=main:cli",
