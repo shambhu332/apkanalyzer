@@ -226,8 +226,9 @@ def start_scan():
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["apk"]
-    if not file.filename or not file.filename.lower().endswith(".apk"):
-        return jsonify({"error": "Only .apk files are accepted"}), 400
+    _ACCEPTED_EXTS = (".apk", ".aab", ".xapk", ".apks", ".apkm")
+    if not file.filename or Path(file.filename).suffix.lower() not in _ACCEPTED_EXTS:
+        return jsonify({"error": f"Accepted formats: {', '.join(_ACCEPTED_EXTS)}"}), 400
 
     # Validate the magic bytes BEFORE writing the upload to disk. This stops
     # an attacker from briefly persisting arbitrary content under a .apk
@@ -237,7 +238,8 @@ def start_scan():
         return jsonify({"error": f"Invalid APK: {reason}"}), 400
 
     scan_id = str(uuid.uuid4())
-    apk_path = UPLOAD_DIR / f"{scan_id}.apk"
+    file_ext = Path(file.filename).suffix.lower() or ".apk"
+    apk_path = UPLOAD_DIR / f"{scan_id}{file_ext}"
     file.save(str(apk_path))
 
     confidence = request.form.get("confidence", "LOW").upper()
