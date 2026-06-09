@@ -143,6 +143,10 @@ components:
         merged_splits:
           type: array
           items: { type: string }
+        analysis_warnings:
+          type: array
+          items: { type: string }
+          description: Non-fatal warnings, e.g. taint worklist truncation
 
     Report:
       type: object
@@ -248,7 +252,7 @@ paths:
                 apk:
                   type: string
                   format: binary
-                  description: The APK file payload
+                  description: "APK/AAB/XAPK/APKS/APKM file payload"
                 confidence:
                   type: string
                   enum: [HIGH, MEDIUM, LOW]
