@@ -5,7 +5,7 @@ setup(
     version="1.0.0",
     description="Advanced static analysis engine for Android APKs",
     packages=find_packages(),
-    python_requires=">=3.9",
+    python_requires=">=3.10",
     install_requires=[
         "androguard==3.3.5",
         "lxml>=4.9.0",

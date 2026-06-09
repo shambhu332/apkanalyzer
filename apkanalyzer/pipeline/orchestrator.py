@@ -41,8 +41,9 @@ from apkanalyzer.ir.call_graph import CallGraph
 from apkanalyzer.ir.cfg_builder import build_cfg
 from apkanalyzer.ir.models import MethodDescriptor, Finding
 from apkanalyzer.analysis.reachability import compute_reachable_methods
+from apkanalyzer.analysis.reflection import synthesise_reflection_edges
 from apkanalyzer.analysis.taint.engine import TaintEngine
-from apkanalyzer.analysis.detectors.crypto_detector import CryptoDetector
+from apkanalyzer.analysis.detectors.crypto_detector import CryptoDetector, build_algorithm_index
 from apkanalyzer.analysis.detectors.network_detector import NetworkDetector
 from apkanalyzer.analysis.detectors.storage_detector import StorageDetector
 from apkanalyzer.analysis.detectors.webview_detector import WebViewDetector
@@ -56,17 +57,59 @@ from apkanalyzer.analysis.detectors.intent_detector import IntentDetector
 from apkanalyzer.analysis.detectors.logging_detector import LoggingDetector
 from apkanalyzer.analysis.detectors.native_detector import NativeDetector
 from apkanalyzer.analysis.detectors.resource_detector import ResourceScanner
+from apkanalyzer.analysis.detectors.sbom_detector import SBOMDetector, write_sbom
+from apkanalyzer.analysis.detectors.tracker_detector import TrackerDetector
 from apkanalyzer.scoring.confidence import filter_findings, summarise
 from apkanalyzer.scoring.owasp import assign_owasp
 from apkanalyzer.scoring.cvss import assign_vector
+from apkanalyzer.scoring.behavior import score_behaviors
 from apkanalyzer.reporting.json_reporter import JSONReporter
 from apkanalyzer.reporting.html_reporter import HTMLReporter
 from apkanalyzer.plugins.loader import load_plugins
 from apkanalyzer.rules.engine import RuleEngine
 from apkanalyzer.utils.test_class import is_test_class as _is_test_class
+from apkanalyzer.utils import jadx_bridge
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+def _findings_from_dicts(items: list[dict]) -> list[Finding]:
+    """Rehydrate Finding objects from cached dict payloads.
+
+    The detector cache stores `Finding.to_dict()` output. Reconstructing the
+    full object (rather than passing dicts around) keeps the rest of the
+    orchestrator monomorphic — every downstream consumer expects Finding
+    instances. Fields not represented in the cached dict (notably
+    `taint_path`) are silently dropped: per-method detectors don't emit
+    those, so it's a non-issue here.
+    """
+    from apkanalyzer.ir.models import Severity as _Sev, Confidence as _Conf
+    out: list[Finding] = []
+    for d in items or []:
+        try:
+            loc = d.get("location") or {}
+            out.append(Finding(
+                rule_id=d.get("rule_id", ""),
+                title=d.get("title", ""),
+                description=d.get("description", ""),
+                severity=_Sev(d.get("severity", "INFO")),
+                confidence=_Conf(d.get("confidence", "LOW")),
+                category=d.get("category", "GENERAL"),
+                class_name=loc.get("class", "") or d.get("class_name", ""),
+                method_name=loc.get("method", "") or d.get("method_name", ""),
+                file_path=loc.get("file", "") or d.get("file_path", ""),
+                line_number=int(loc.get("line", 0) or d.get("line_number", 0) or 0),
+                evidence=d.get("evidence", ""),
+                remediation=d.get("remediation", ""),
+                cwe_id=d.get("cwe_id", ""),
+                cvss=float(d.get("cvss", 0.0) or 0.0),
+                cvss_vector=d.get("cvss_vector", ""),
+                owasp_category=d.get("owasp_category", ""),
+            ))
+        except Exception as exc:
+            logger.debug("Skipping malformed cached finding: %s", exc)
+    return out
 
 # Type alias for the optional progress callback. Hands the web layer
 # (or any embedder) live stage telemetry without forcing them to re-implement
@@ -102,7 +145,10 @@ class AnalysisPipeline:
         extra_sources: Optional[list] = None,
         extra_sinks: Optional[list] = None,
         extra_sanitizers: Optional[list] = None,
+        extra_native_summaries: Optional[list] = None,
         masvs_profile: Optional[str] = None,
+        enable_jadx: bool = True,
+        enable_detector_cache: bool = True,
     ) -> None:
         self.apk_path = apk_path
         self.output_dir = Path(output_dir)
@@ -114,13 +160,26 @@ class AnalysisPipeline:
         self.extra_sources = extra_sources or []
         self.extra_sinks = extra_sinks or []
         self.extra_sanitizers = extra_sanitizers or []
+        self.extra_native_summaries = extra_native_summaries or []
         self.masvs_profile = masvs_profile
+        self.enable_jadx = enable_jadx
+        self.enable_detector_cache = enable_detector_cache
 
         self._ctx: Optional[APKContext] = None
         self._findings: list[Finding] = []
         self._start_time: float = 0.0
         self._candidates: list[tuple] = []  # (cfg, desc, reg_strings) — built once, reused
         self._last_reachable: set[str] = set()
+        self._java_dir: Optional[str] = None
+        # Lazily initialised in _run_per_method_detectors so that disabling
+        # caching skips the SQLite open entirely.
+        self._detector_cache = None
+        if enable_detector_cache:
+            try:
+                from apkanalyzer.cache.scan_cache import ScanCache
+                self._detector_cache = ScanCache()
+            except Exception as exc:
+                logger.debug("detector cache init failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Entry point
@@ -159,6 +218,14 @@ class AnalysisPipeline:
                 _notify("Unpacking Resources", "Running apktool", 12)
                 unpack_with_apktool(self._ctx)
 
+            if self.enable_jadx and jadx_bridge.is_available():
+                progress.update(task, description="Decompiling with JADX…")
+                _notify("JADX Decompilation", "Generating Java source for grep rules", 15)
+                java_root = self._run_jadx_decompile()
+                if java_root:
+                    self._java_dir = str(java_root)
+                    _notify("JADX Decompilation", f"Java source at {java_root}", 16)
+
             progress.update(task, description="Parsing AndroidManifest…")
             _notify("Manifest", "Parsing AndroidManifest.xml", 18)
             self._ctx.manifest = parse_manifest(self._ctx.apk)
@@ -166,6 +233,15 @@ class AnalysisPipeline:
             progress.update(task, description="Building call graph…")
             _notify("Call Graph", "Building inter-procedural call graph", 25)
             cg = CallGraph.build(self._ctx.dx)
+
+            progress.update(task, description="Resolving reflection edges…")
+            _notify("Reflection", "Synthesising Class.forName/Method.invoke edges", 28)
+            try:
+                added = synthesise_reflection_edges(cg, self._ctx.dx)
+                if added:
+                    _notify("Reflection", f"{added} synthetic edges", 30)
+            except Exception as exc:
+                logger.warning("Reflection edge synthesis failed: %s", exc)
 
             progress.update(task, description="Computing reachable methods…")
             _notify("Reachability", "Computing reachable methods from entry points", 32)
@@ -212,6 +288,14 @@ class AnalysisPipeline:
             _notify("SDK Inventory", "Detecting third-party SDKs", 80)
             self._findings.extend(self._run_sdk_scan())
 
+            progress.update(task, description="Tracker DB scan…")
+            _notify("Tracker DB", "Detecting Exodus-Privacy trackers", 81)
+            self._findings.extend(self._run_tracker_scan())
+
+            progress.update(task, description="SBOM + CVE lookup…")
+            _notify("SBOM", "Building component inventory + CVE lookup", 82)
+            self._findings.extend(self._run_sbom())
+
             progress.update(task, description="Privacy compliance checks…")
             _notify("Privacy Checks", "PII / location / advertising-id audit", 83)
             self._findings.extend(self._run_privacy_checks())
@@ -249,14 +333,46 @@ class AnalysisPipeline:
     # Stage implementations
     # ------------------------------------------------------------------
 
+    def _run_jadx_decompile(self):
+        """
+        Drive the optional JADX bridge. Returns the Java source root or None.
+
+        The decompiled tree is dropped under the apktool unpack dir (when
+        present) so cleanup logic that already removes the unpack dir also
+        cleans up Java sources. If apktool was skipped, we fall back to a
+        tempdir keyed by output_dir so reruns reuse the same location.
+        """
+        try:
+            base = Path(self._ctx.unpacked_dir) if self._ctx.unpacked_dir else self.output_dir
+            out = base / "java"
+            return jadx_bridge.decompile(self.apk_path, str(out))
+        except Exception as exc:
+            logger.warning("JADX decompile stage failed: %s", exc)
+            return None
+
     def _run_taint(self, cg: CallGraph, reachable: set[str]) -> list[Finding]:
+        # Pull any data_flow specs out of YAML rules so users can declare
+        # sources/sinks/sanitizers inline alongside their regex rules.
+        # Cache the engine so the YAML scan stage can dedupe against rule
+        # IDs that produced findings here.
+        try:
+            rule_engine = RuleEngine()
+        except Exception as exc:
+            logger.debug("RuleEngine init for data-flow specs failed: %s", exc)
+            rule_engine = None
+        yaml_sources, yaml_sinks, yaml_sanitizers = (
+            rule_engine.collect_taint_specs() if rule_engine else ([], [], [])
+        )
+        self._cached_rule_engine = rule_engine
+
         engine = TaintEngine(
             cg,
             self._ctx.dx,
             max_depth=self.taint_depth,
-            extra_sources=self.extra_sources,
-            extra_sinks=self.extra_sinks,
-            extra_sanitizers=self.extra_sanitizers,
+            extra_sources=list(self.extra_sources) + yaml_sources,
+            extra_sinks=list(self.extra_sinks) + yaml_sinks,
+            extra_sanitizers=list(self.extra_sanitizers) + yaml_sanitizers,
+            extra_native_summaries=self.extra_native_summaries,
         )
         return engine.run(reachable)
 
@@ -299,13 +415,54 @@ class AnalysisPipeline:
     def _run_per_method_detectors(self) -> list[Finding]:
         """Run all per-method detectors in parallel using a thread pool."""
         import concurrent.futures
+        import hashlib
+
+        # Build a class → set(algorithm) index once per scan so the crypto
+        # detector can resolve factory-pattern keygens whose algorithm
+        # string is set in a different method on the same class.
+        algorithm_index = build_algorithm_index(self._candidates)
+
+        # Optional per-detector cache. Keyed by detector class name + a stable
+        # hash of the method's instructions so an unchanged smali method
+        # isn't re-analysed by every detector on every run. The full-report
+        # cache only helps when the entire APK is unchanged; this one helps
+        # in the common case where a single class was rebuilt.
+        detector_cache = self._detector_cache
+        cache_stats = {"hit": 0, "miss": 0}
+
+        def _method_hash(cfg) -> str:
+            h = hashlib.md5(usedforsecurity=False)
+            for block in cfg.blocks.values():
+                for ins in block.instructions:
+                    h.update(ins.get("raw", "").encode("utf-8", "ignore"))
+                    h.update(b"\n")
+            return h.hexdigest()
+
+        def _run_with_cache(detector, det_id, method_key, runner):
+            if detector_cache is not None and method_key:
+                cache_key = f"{det_id}|{method_key}"
+                cached = detector_cache.get_detector(cache_key, method_key)
+                if cached is not None:
+                    cache_stats["hit"] += 1
+                    return _findings_from_dicts(cached)
+                cache_stats["miss"] += 1
+                fresh = runner()
+                try:
+                    detector_cache.put_detector(
+                        cache_key, method_key, [f.to_dict() for f in fresh],
+                    )
+                except Exception as exc:
+                    logger.debug("detector_cache put failed: %s", exc)
+                return fresh
+            return runner()
 
         def _analyse_method(args):
             cfg, desc, reg_strings = args
+            method_key = _method_hash(cfg) if detector_cache is not None else ""
             # Each thread gets fresh detector instances. They are stateless,
             # but per-call construction makes that contract explicit and
             # avoids any future shared-state surprises.
-            local_crypto = CryptoDetector()
+            local_crypto = CryptoDetector(algorithm_index=algorithm_index)
             local_network = NetworkDetector()
             local_storage = StorageDetector()
             local_webview = WebViewDetector()
@@ -315,15 +472,35 @@ class AnalysisPipeline:
             local_logging = LoggingDetector()
             local_native = NativeDetector()
             result: list[Finding] = []
+            # Detectors whose output is purely a function of the CFG +
+            # reg_strings are safe to cache. Crypto is intentionally
+            # excluded — its output depends on the global algorithm_index,
+            # which can change across runs even if the smali doesn't.
             result.extend(local_crypto.analyse(cfg, desc, reg_strings))
-            result.extend(local_network.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_storage.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_webview.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_obfusc.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_deeplink.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_intent.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_logging.analyse_method(cfg, desc, reg_strings))
-            result.extend(local_native.analyse_method(cfg, desc, reg_strings))
+            result.extend(_run_with_cache(
+                local_network, "network", method_key,
+                lambda: local_network.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_storage, "storage", method_key,
+                lambda: local_storage.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_webview, "webview", method_key,
+                lambda: local_webview.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_obfusc, "obfuscation", method_key,
+                lambda: local_obfusc.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_deeplink, "deeplink", method_key,
+                lambda: local_deeplink.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_intent, "intent", method_key,
+                lambda: local_intent.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_logging, "logging", method_key,
+                lambda: local_logging.analyse_method(cfg, desc, reg_strings)))
+            result.extend(_run_with_cache(
+                local_native, "native_method", method_key,
+                lambda: local_native.analyse_method(cfg, desc, reg_strings)))
             return result
 
         findings: list[Finding] = []
@@ -357,6 +534,12 @@ class AnalysisPipeline:
                     self._ctx.network_security_config_xml,
                     self._ctx.manifest.get("package", ""),
                 )
+            )
+
+        if detector_cache is not None and (cache_stats["hit"] or cache_stats["miss"]):
+            logger.info(
+                "detector_cache: hit=%d miss=%d (%d candidates)",
+                cache_stats["hit"], cache_stats["miss"], len(self._candidates),
             )
 
         return findings
@@ -509,6 +692,30 @@ class AnalysisPipeline:
         pkg = self._ctx.manifest.get("package", "")
         return detector.analyse_classes(class_names, pkg)
 
+    def _run_tracker_scan(self) -> list[Finding]:
+        try:
+            return TrackerDetector().analyse_classes(self._collect_class_names())
+        except Exception as exc:
+            logger.warning("Tracker detector failed: %s", exc)
+            return []
+
+    def _run_sbom(self) -> list[Finding]:
+        """
+        Build the SBOM, look up bundled libraries against the offline CVE
+        feed, and write `sbom.cdx.json` next to the report so downstream
+        tooling (Dependency-Track, Trivy, GitHub dependency-graph) can
+        consume it directly.
+        """
+        try:
+            class_names = self._collect_class_names()
+            findings, sbom = SBOMDetector().analyse(self._ctx, class_names)
+            write_sbom(sbom, str(self.output_dir / "sbom.cdx.json"))
+            self._sbom = sbom
+            return findings
+        except Exception as exc:
+            logger.warning("SBOM/CVE stage failed: %s", exc)
+            return []
+
     def _collect_class_names(self) -> list[str]:
         class_names: list[str] = []
         try:
@@ -546,11 +753,13 @@ class AnalysisPipeline:
         """
         if not self._ctx.unpacked_dir:
             return []
-        try:
-            engine = RuleEngine()
-        except Exception as exc:
-            logger.warning("RuleEngine init failed: %s", exc)
-            return []
+        engine = getattr(self, "_cached_rule_engine", None)
+        if engine is None:
+            try:
+                engine = RuleEngine()
+            except Exception as exc:
+                logger.warning("RuleEngine init failed: %s", exc)
+                return []
         if not engine.rules:
             return []
 
@@ -567,6 +776,7 @@ class AnalysisPipeline:
                 self._ctx.unpacked_dir,
                 reachable_classes=reachable_classes or None,
                 existing_rule_ids=existing_rule_ids,
+                java_dir=self._java_dir,
             )
         except Exception as exc:
             logger.warning("RuleEngine scan failed: %s", exc)
@@ -630,11 +840,27 @@ class AnalysisPipeline:
             "dangerous_permissions": self._ctx.manifest.get("dangerous_permissions", []),
             "analysis_duration_seconds": round(time.time() - self._start_time, 2),
         }
+        # If we merged an AAB / XAPK / split bundle, surface that so users
+        # know which constituent splits contributed to the report.
+        if getattr(self._ctx, "bundle_kind", None):
+            metadata["bundle_kind"] = self._ctx.bundle_kind
+            metadata["merged_splits"] = list(self._ctx.merged_splits or [])
+
+        # Quark-style behaviour scoring runs over the final filtered+enriched
+        # findings list so it sees the same picture the user does. Empty
+        # output is fine — the report key is still emitted so downstream
+        # consumers can rely on its presence.
+        try:
+            behaviours = [b.to_dict() for b in score_behaviors(self._findings)]
+        except Exception as exc:
+            logger.warning("Behaviour scoring failed: %s", exc)
+            behaviours = []
 
         report = {
             "metadata": metadata,
             "summary": summary,
             "findings": [f.to_dict() for f in self._findings],
+            "malware_behaviors": behaviours,
         }
 
         # Write JSON

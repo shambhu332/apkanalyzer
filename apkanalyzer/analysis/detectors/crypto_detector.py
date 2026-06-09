@@ -12,6 +12,30 @@ CRYPTO_INSECURE_RANDOM   — java.util.Random instead of SecureRandom
 CRYPTO_STATIC_IV         — IvParameterSpec constructed with constant byte array
 CRYPTO_NO_PADDING        — Cipher with NoPadding on CBC (padding oracle risk)
 CRYPTO_KEYSTORE_BYPASS   — Key generated outside AndroidKeyStore (software-only)
+
+Cross-method algorithm tracking
+-------------------------------
+Key-size validation needs to know *which* algorithm the keygen was built for.
+A factory pattern hides that information from the call site::
+
+    private KeyPairGenerator newGen() {                  // method A
+        return KeyPairGenerator.getInstance("RSA");      // <- algo string here
+    }
+    void doKey() {                                       // method B
+        KeyPairGenerator g = newGen();
+        g.initialize(1024);                              // <- key size here
+    }
+
+Without cross-method context, method B sees `initialize(1024)` and no
+algorithm string, so the detector cannot decide whether 1024 bits is
+sufficient (it is for AES-symmetric keys, it is not for RSA).
+
+The orchestrator now performs a pre-pass over every reachable method to
+collect declared algorithms per *declaring class* (factories almost
+always produce one cipher family per class). That index is passed to
+:class:`CryptoDetector` via :func:`set_algorithm_index`; `_check_key_size`
+falls back to the class-level algorithm map when the local string pool
+yields nothing.
 """
 
 from __future__ import annotations
@@ -46,9 +70,64 @@ _CONST_STRING_RE = re.compile(r'const-string[/\w]* \w+, "([^"]+)"')
 # AndroidKeyStore usage — keys generated here are hardware-backed; suppress some findings
 _KEYSTORE_PROVIDERS = {"AndroidKeyStore", "AndroidOpenSSL"}
 
+# Class+method patterns whose first string argument is the cipher / KDF
+# algorithm name. Used by `build_algorithm_index` to mine factory methods.
+_KEYGEN_FACTORIES = (
+    "Ljava/security/KeyPairGenerator;->getInstance",
+    "Ljavax/crypto/KeyGenerator;->getInstance",
+    "Ljava/security/AlgorithmParameters;->getInstance",
+    "Ljavax/crypto/SecretKeyFactory;->getInstance",
+    "Ljavax/crypto/Cipher;->getInstance",
+    "Ljava/security/MessageDigest;->getInstance",
+)
+
+
+def build_algorithm_index(
+    candidates: list,
+) -> dict[str, set[str]]:
+    """Pre-pass that mines algorithm names declared by every method.
+
+    Walks every (cfg, desc, reg_strings) candidate from the orchestrator
+    and records each algorithm string passed to a known keygen / cipher
+    factory. The resulting `{class_name → {"AES", "RSA", ...}}` map lets
+    `CryptoDetector._check_key_size` resolve the algorithm for an
+    `initialize(N)` call even when the algorithm string lives in a
+    *different* method on the same class (factory pattern).
+
+    The index is keyed by the *declaring class* of the factory call, so
+    a class with `getKeyGen()` returning `RSA` then a sister method
+    `setKeySize(int)` calling `initialize` recovers the RSA association.
+    """
+    index: dict[str, set[str]] = {}
+    for cfg, desc, _reg_strings in candidates:
+        for block in cfg.blocks.values():
+            for instr in block.instructions:
+                raw = instr.get("raw", "")
+                if not any(p in raw for p in _KEYGEN_FACTORIES):
+                    continue
+                for op in instr.get("operands", []):
+                    val = op.get("value")
+                    if isinstance(val, str) and 1 <= len(val) <= 64:
+                        index.setdefault(desc.class_name, set()).add(val)
+    return index
+
 
 class CryptoDetector:
-    """Stateless detector — call analyse() on each method's CFG."""
+    """Per-method detector with optional cross-method algorithm hints.
+
+    The detector is stateless across methods *except* for the optional
+    `algorithm_index`: a `{class_name → set(algorithm)}` map populated by
+    the orchestrator's pre-pass. When the per-method `reg_strings` does
+    not yield an algorithm name (factory-pattern keygen), we consult the
+    index to discover the algorithm declared elsewhere in the same class.
+    """
+
+    def __init__(self, algorithm_index: Optional[dict[str, set[str]]] = None) -> None:
+        self.algorithm_index = algorithm_index or {}
+
+    def set_algorithm_index(self, index: dict[str, set[str]]) -> None:
+        """Replace the cross-method algorithm map used by `_check_key_size`."""
+        self.algorithm_index = index or {}
 
     def analyse(
         self,
@@ -104,7 +183,7 @@ class CryptoDetector:
             findings.extend(self._check_static_iv(
                 instr, raw, desc, const_byte_regs, iv_param_regs))
             findings.extend(self._check_key_size(
-                instr, raw, reg_strings, desc))
+                instr, raw, reg_strings, desc, instructions))
             findings.extend(self._check_keystore_bypass(
                 instr, raw, reg_strings, desc))
 
@@ -300,8 +379,23 @@ class CryptoDetector:
             pass
         return []
 
-    def _check_key_size(self, instr, raw, reg_strings, desc) -> list[Finding]:
-        """Detect weak key sizes in KeyPairGenerator and KeyGenerator."""
+    def _check_key_size(
+        self, instr, raw, reg_strings, desc, instructions=None,
+    ) -> list[Finding]:
+        """Detect weak key sizes in KeyPairGenerator and KeyGenerator.
+
+        Algorithm resolution order:
+          1. Local `reg_strings` — the algo string is in this method's
+             const-string pool (typical inline construction).
+          2. The same method's instruction stream — look for any
+             ``getInstance("ALGO")`` call whose argument is a const-string
+             we have already seen, even if the string never made it into
+             the method's `reg_strings` dict (some build pipelines strip
+             unused entries).
+          3. The cross-method `algorithm_index` keyed by declaring class —
+             handles factory-pattern keygens where one method calls
+             `getInstance("RSA")` and another calls `initialize(1024)`.
+        """
         if "KeyPairGenerator;->initialize" not in raw and \
                 "KeyGenerator;->init" not in raw:
             return []
@@ -311,17 +405,9 @@ class CryptoDetector:
         for op in operands:
             val = op.get("value")
             if isinstance(val, int) and 64 <= val <= 16384:
-                # Determine algorithm from surrounding context (reg_strings)
-                # Look for the closest algorithm string in reg_strings
-                algo = ""
-                for v in reg_strings.values():
-                    v_upper = v.upper()
-                    for alg in _MIN_KEY_SIZE:
-                        if alg in v_upper:
-                            algo = alg
-                            break
-                    if algo:
-                        break
+                algo = self._resolve_algorithm(
+                    reg_strings, desc, instructions or [],
+                )
 
                 min_size = _MIN_KEY_SIZE.get(algo, 2048)
                 if val < min_size:
@@ -383,6 +469,46 @@ class CryptoDetector:
         )]
 
     # ------------------------------------------------------------------
+
+    def _resolve_algorithm(
+        self,
+        reg_strings: dict[str, str],
+        desc: MethodDescriptor,
+        instructions: list[dict],
+    ) -> str:
+        """Best-effort resolution of which algorithm this keygen targets.
+
+        Returns the empty string if no algorithm could be determined; the
+        caller treats that as "use the conservative 2048-bit default".
+        """
+        # 1. Local string pool
+        for v in reg_strings.values():
+            v_upper = v.upper()
+            for alg in _MIN_KEY_SIZE:
+                if alg in v_upper:
+                    return alg
+        # 2. Same-method getInstance scan — pick up algo strings that
+        # androguard parsed but the orchestrator didn't fold into reg_strings.
+        for ins in instructions:
+            if "KeyPairGenerator;->getInstance" not in ins.get("raw", "") and \
+                    "KeyGenerator;->getInstance" not in ins.get("raw", ""):
+                continue
+            for op in ins.get("operands", []):
+                val = op.get("value")
+                if not isinstance(val, str):
+                    continue
+                v_upper = val.upper()
+                for alg in _MIN_KEY_SIZE:
+                    if alg in v_upper:
+                        return alg
+        # 3. Cross-method index keyed by declaring class
+        cls_algos = self.algorithm_index.get(desc.class_name, set())
+        for alg in cls_algos:
+            alg_upper = alg.upper()
+            for known in _MIN_KEY_SIZE:
+                if known in alg_upper:
+                    return known
+        return ""
 
     def _resolve_string_arg(
         self,

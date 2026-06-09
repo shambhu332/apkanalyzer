@@ -38,6 +38,10 @@ _DENIED_TOP_LEVEL_MODULES = frozenset({
     "urllib", "urllib.request", "http", "http.client",
     "ftplib", "telnetlib", "smtplib", "imaplib", "poplib",
     "paramiko", "fabric", "requests",
+    # Reflection back-doors. Without these a plugin can sidestep every other
+    # entry in this set (e.g. `importlib.import_module('subprocess')`,
+    # `sys.modules['os'].system(...)`, `builtins.__import__('socket')`).
+    "sys", "importlib", "builtins", "__builtins__",
 })
 
 # Builtins we refuse — eval/exec/__import__ are the classic escape hatches,

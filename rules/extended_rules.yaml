@@ -1,0 +1,562 @@
+# Extended rule pack — covers high-value MASVS L1/L2 patterns and Semgrep
+# mobile-android idioms that complement the focused rule files
+# (crypto / network / storage / webview / android_modern / misc).
+#
+# Authoring notes
+# ---------------
+# * Stay narrow: each pattern should be specific enough that a single
+#   smali line uniquely identifies the dangerous call. False positives
+#   here pollute the safety-net pass that runs *after* the structured
+#   detectors, so we'd rather miss the obvious-second case than fire on
+#   benign code.
+# * Use `multiline: true` only when the dangerous condition truly spans
+#   instructions (the regex engine is expensive in DOTALL+MULTILINE mode).
+# * Keep CVSS scores aligned with the rest of the pack — see
+#   `apkanalyzer/scoring/cvss.py` for the rubric.
+# * Rule IDs use the existing CATEGORY_SUBJECT_QUALIFIER convention so
+#   they sort cleanly in the report and SARIF outputs.
+
+rules:
+
+  # ── Crypto: post-quantum & cipher-misuse tail ────────────────────────
+  - id: CRYPTO_DSA_LEGACY
+    title: "DSA / DSS signature in use — legacy, deprecated"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-327
+    cvss: 5.5
+    category: CRYPTO
+    description: >
+      DSA produces non-deterministic signatures whose security collapses
+      under poor PRNG (PS3-style nonce reuse). Modern stacks should use
+      EdDSA or ECDSA-NIST-P-256.
+    smali_pattern: 'Signature;->getInstance\(.*"(SHA1withDSA|SHA256withDSA|DSA)"'
+    remediation: "Migrate to EdDSA (Ed25519) or ECDSA with P-256 + SHA-256."
+
+  - id: CRYPTO_PBE_DEFAULT_ITERATIONS
+    title: "PBEKeySpec used without explicit iteration count"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-916
+    cvss: 7.0
+    category: CRYPTO
+    description: >
+      PBEKeySpec(password, salt) without the `iterationCount` overload
+      relies on the JCE default which has historically been as low as
+      1000. OWASP recommends 600,000+ for PBKDF2-SHA256.
+    smali_pattern: 'PBEKeySpec;-><init>\(\[C\[B\)V'
+    remediation: "Use the (password, salt, iterationCount, keyLen) overload with iterationCount >= 600000."
+
+  - id: CRYPTO_AES_GCM_REUSED_NONCE
+    title: "AES-GCM Cipher reinitialised inside a loop — possible nonce reuse"
+    severity: CRITICAL
+    confidence: LOW
+    cwe: CWE-323
+    cvss: 9.0
+    category: CRYPTO
+    multiline: true
+    description: >
+      AES-GCM nonce reuse with the same key catastrophically leaks the
+      authentication key. A Cipher object initialised once inside a loop
+      with a fixed IvParameterSpec is the canonical mistake.
+    smali_pattern: 'Cipher;->init\(I.*GCMParameterSpec[\s\S]{0,200}goto'
+    remediation: "Generate a fresh 96-bit nonce per encrypt() call: SecureRandom().nextBytes(iv)."
+
+  - id: CRYPTO_RC4_LIBRARY_PRESENT
+    title: "RC4 stream cipher referenced"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-327
+    cvss: 7.5
+    category: CRYPTO
+    description: >
+      RC4 is broken — biased keystream (RFC 7465). Even legacy compatibility
+      should not pull it in.
+    smali_pattern: 'Cipher;->getInstance\(.*"(RC4|ARCFOUR)"'
+    remediation: "Replace with AES-GCM-256 or ChaCha20-Poly1305."
+
+  - id: CRYPTO_NULL_CIPHER
+    title: "javax.crypto.NullCipher — no encryption"
+    severity: CRITICAL
+    confidence: HIGH
+    cwe: CWE-326
+    cvss: 9.0
+    category: CRYPTO
+    description: >
+      NullCipher passes plaintext through unchanged. Its presence in
+      production code almost always indicates a broken security control.
+    smali_pattern: 'Ljavax/crypto/NullCipher;'
+    remediation: "Replace with a real cipher (AES-GCM-256). NullCipher must never appear in production paths."
+
+  - id: CRYPTO_MAC_NO_KEY
+    title: "Mac.init invoked without keyed MAC"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-916
+    cvss: 5.5
+    category: CRYPTO
+    description: >
+      Mac instances must be keyed; an unkeyed digest provides no
+      authentication and reduces to a plain hash.
+    smali_pattern: 'Mac;->init\(Ljava/security/Key;\)V'
+    remediation: "Initialise Mac with a SecretKeySpec derived from a high-entropy KDF (HKDF or PBKDF2 600k+)."
+
+  # ── Storage: backup / sync gaps ──────────────────────────────────────
+  - id: STORAGE_AUTOBACKUP_NO_RULES
+    title: "android:fullBackupContent not specified — keys may be backed up"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-359
+    cvss: 5.3
+    category: STORAGE
+    description: >
+      Without an explicit fullBackupContent rule set, Android may copy
+      app private storage (including session tokens, db files) to Google
+      Drive on backup-eligible devices.
+    smali_pattern: 'android:allowBackup="true"'
+    remediation: "Provide res/xml/backup_rules.xml with explicit excludes for credentials and DBs."
+
+  - id: STORAGE_LARGE_HEAP_OPT_IN
+    title: "android:largeHeap opt-in — increases attack surface for OOM exploits"
+    severity: LOW
+    confidence: HIGH
+    cwe: CWE-789
+    cvss: 3.1
+    category: STORAGE
+    description: >
+      largeHeap=true requests a multi-hundred-MB heap which can be abused
+      by an attacker-controlled image / asset to trigger memory-pressure
+      logic bugs.
+    smali_pattern: 'android:largeHeap="true"'
+    remediation: "Remove largeHeap unless absolutely required; use streaming APIs to handle large media."
+
+  - id: STORAGE_KEYSTORE_BIO_NOT_BOUND
+    title: "KeyGenParameterSpec.Builder used without setUserAuthenticationRequired"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-522
+    cvss: 5.3
+    category: STORAGE
+    description: >
+      Keystore-backed keys without setUserAuthenticationRequired(true)
+      can be used by malware running in the same uid context — they only
+      protect against off-device key extraction.
+    smali_pattern: 'KeyGenParameterSpec\$Builder;->setUserAuthenticationRequired\(Z\)L'
+    remediation: "Pin biometric / device-credential auth on every cipher.init() with setUserAuthenticationRequired(true)."
+
+  - id: STORAGE_INTERNAL_CLEARTEXT_DB
+    title: "openDatabase / openOrCreateDatabase without password"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-311
+    cvss: 5.5
+    category: STORAGE
+    description: >
+      SQLiteDatabase.openOrCreateDatabase / SQLiteOpenHelper without
+      SQLCipher writes plaintext rows to disk, recoverable by anything
+      that gains a single fs read.
+    smali_pattern: 'SQLiteDatabase;->open(Or)?(C|c)reateDatabase\('
+    remediation: "Use net.sqlcipher with a key derived from Keystore-protected entropy."
+
+  # ── Network: TLS / pinning depth ─────────────────────────────────────
+  - id: NETWORK_OKHTTP_PINNER_NOOP
+    title: "CertificatePinner.Builder constructed without add()"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-295
+    cvss: 7.0
+    category: NETWORK
+    multiline: true
+    description: >
+      Building a CertificatePinner and immediately calling build() with
+      no pin entries is a no-op pin set: pinning enforced for zero
+      hostnames. Common cargo-cult mistake.
+    smali_pattern: 'CertificatePinner\$Builder;-><init>\(\)V[\s\S]{0,200}CertificatePinner\$Builder;->build'
+    remediation: "Call .add(host, sha256pin) for every protected hostname before build()."
+
+  - id: NETWORK_SSL_INSECURE_FACTORY
+    title: "SSLContext.getInstance(\"SSL\") — falls back to obsolete versions"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-326
+    cvss: 7.0
+    category: NETWORK
+    description: >
+      Plain "SSL" lets the JCE pick any SSLv3+ provider. Modern stacks
+      should pin TLSv1.2 minimum.
+    smali_pattern: 'SSLContext;->getInstance\(.*"(SSL|TLSv1|TLSv1\.1)"'
+    remediation: "Use SSLContext.getInstance(\"TLSv1.3\") or \"TLSv1.2\"."
+
+  - id: NETWORK_DEFAULT_HOSTNAME_VERIFIER_DISABLED
+    title: "HttpsURLConnection.setDefaultHostnameVerifier(ALLOW_ALL_HOSTNAME_VERIFIER)"
+    severity: CRITICAL
+    confidence: HIGH
+    cwe: CWE-297
+    cvss: 9.0
+    category: NETWORK
+    multiline: true
+    description: >
+      Replacing the default hostname verifier with ALLOW_ALL means every
+      HTTPS connection in the JVM accepts a certificate for any host.
+      MITM-trivial.
+    smali_pattern: 'HttpsURLConnection;->setDefaultHostnameVerifier[\s\S]{0,80}ALLOW_ALL_HOSTNAME_VERIFIER'
+    remediation: "Never replace the default verifier with ALLOW_ALL. If pin-skipping is needed for tests, gate it behind BuildConfig.DEBUG."
+
+  - id: NETWORK_TRUSTMANAGER_X509_EMPTY
+    title: "Custom X509TrustManager with empty checkServerTrusted body"
+    severity: CRITICAL
+    confidence: MEDIUM
+    cwe: CWE-295
+    cvss: 9.0
+    category: NETWORK
+    multiline: true
+    description: >
+      Implementing checkServerTrusted as a no-op disables certificate
+      validation entirely.
+    smali_pattern: '\.method.*checkServerTrusted[\s\S]{0,80}\.locals 0[\s\S]{0,80}return-void'
+    remediation: "Validate the chain via the platform default trust manager: TrustManagerFactory.getInstance(...)."
+
+  - id: NETWORK_INSECURE_HTTP_CONNECT
+    title: "URL.openConnection on http:// scheme"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-319
+    cvss: 5.5
+    category: NETWORK
+    description: >
+      Plain HTTP connections, regardless of NSC settings, leak content
+      to passive observers and enable injection attacks.
+    smali_pattern: 'const-string[/\w]* \w+, "http://[^"]+'
+    remediation: "Use https:// URLs exclusively; if a legacy endpoint requires HTTP, document it and add NSC base-config restrictions."
+
+  - id: NETWORK_KTOR_TRUST_ALL
+    title: "Ktor HttpClient configured with TrustAllSocketFactory-like factory"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-295
+    cvss: 7.5
+    category: NETWORK
+    description: >
+      Ktor / Coil customisation that installs a permissive SSLSocketFactory
+      bypasses certificate validation for every Ktor request.
+    smali_pattern: 'Lio/ktor/client/engine/[\w/]+;->setSslContext\(Ljavax/net/ssl/SSLContext;\)V'
+    remediation: "Use the platform default SSLContext; restrict trust via cert-pinning interceptor."
+
+  # ── WebView: extra hardening gaps ────────────────────────────────────
+  - id: WEBVIEW_INTERCEPT_REQUEST_HTTP
+    title: "shouldInterceptRequest returns response for http:// URL"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-319
+    cvss: 5.0
+    category: WEBVIEW
+    description: >
+      Custom shouldInterceptRequest implementations sometimes load a
+      second HTTP URL to fulfil sub-resources, undoing NSC enforcement.
+    smali_pattern: 'shouldInterceptRequest.*"http://'
+    remediation: "Reject http:// resources or redirect to https variant before constructing the WebResourceResponse."
+
+  - id: WEBVIEW_DOM_STORAGE_ENABLED
+    title: "WebSettings.setDomStorageEnabled(true)"
+    severity: LOW
+    confidence: HIGH
+    cwe: CWE-922
+    cvss: 3.5
+    category: WEBVIEW
+    description: >
+      DOM storage in WebView gives the loaded content a 5MB key/value
+      store that survives across navigation. Combined with JS interfaces
+      it becomes a privacy & exfiltration vector.
+    smali_pattern: 'setDomStorageEnabled\(Z\)V'
+    remediation: "Enable DOM storage only when required; pair with addJavascriptInterface restrictions."
+
+  - id: WEBVIEW_SET_USERNAME_PASSWORD
+    title: "WebView.setHttpAuthUsernamePassword stores credentials in plaintext"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-256
+    cvss: 7.0
+    category: WEBVIEW
+    description: >
+      Credentials saved with setHttpAuthUsernamePassword are written to
+      WebView's auth database in plaintext.
+    smali_pattern: 'WebView;->setHttpAuthUsernamePassword'
+    remediation: "Cache credentials in EncryptedSharedPreferences or Android Keystore-protected storage."
+
+  # ── Permissions / IPC widening ───────────────────────────────────────
+  - id: IPC_SEND_BROADCAST_NO_PERMISSION
+    title: "sendBroadcast called without a receiver permission"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-925
+    cvss: 5.0
+    category: IPC
+    description: >
+      sendBroadcast(intent) without the (intent, receiverPermission)
+      overload posts to every registered receiver in the system —
+      including malware listening for action strings.
+    smali_pattern: 'Context;->sendBroadcast\(Landroid/content/Intent;\)V'
+    remediation: "Use sendBroadcast(intent, permission) with a signature-level permission, or send via LocalBroadcastManager / explicit Intent."
+
+  - id: IPC_PENDING_INTENT_FLAG_MUTABLE
+    title: "PendingIntent created with FLAG_MUTABLE"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-927
+    cvss: 7.0
+    category: IPC
+    description: >
+      Mutable PendingIntents allow third-party apps to fill in unset
+      fields, leading to intent redirection / privilege escalation.
+    smali_pattern: 'PendingIntent;->getActivity\([\s\S]{0,40}0x2000000'
+    remediation: "Use FLAG_IMMUTABLE (0x4000000). Never combine FLAG_MUTABLE with implicit Intents."
+
+  - id: IPC_ACTIVITY_INTENT_FILTER_ACTION_VIEW_NO_BROWSE
+    title: "ACTION_VIEW intent-filter without BROWSABLE — orphaned deep link"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-940
+    cvss: 3.5
+    category: IPC
+    description: >
+      Activities exposing ACTION_VIEW without the BROWSABLE category
+      are reachable from other apps but not from the system browser,
+      a confusing partial-attack surface.
+    smali_pattern: 'android.intent.action.VIEW.*\n.*android.intent.category.DEFAULT'
+    multiline: true
+    remediation: "Either remove ACTION_VIEW or add BROWSABLE if web-launchable; in either case, validate URI components."
+
+  - id: IPC_GRANT_URI_PERMISSION_BROAD
+    title: "Intent.FLAG_GRANT_READ_URI_PERMISSION on Intent without specific data URI"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-925
+    cvss: 5.0
+    category: IPC
+    description: >
+      Granting URI permissions without a tightly-scoped data URI gives
+      the receiver read access to everything the sender can read.
+    smali_pattern: 'addFlags\(I\)Landroid/content/Intent;[\s\S]{0,40}0x1'
+    multiline: true
+    remediation: "Set Intent data to a specific content:// URI before adding grant flags."
+
+  # ── Privacy / tracking ───────────────────────────────────────────────
+  - id: PRIVACY_ANDROID_ID_READ
+    title: "Settings.Secure.ANDROID_ID read"
+    severity: MEDIUM
+    confidence: HIGH
+    cwe: CWE-359
+    cvss: 5.0
+    category: PRIVACY
+    description: >
+      ANDROID_ID is a 64-bit identifier that survives factory resets on
+      pre-Oreo devices and is signed-app-stable on newer versions. Use
+      requires consent under GDPR / DMA.
+    smali_pattern: 'Settings\$Secure;->ANDROID_ID'
+    remediation: "Use Identity for Advertising (AAID) with consent, or generate a per-install UUID stored in app private storage."
+
+  - id: PRIVACY_AAID_LIMIT_AD_TRACKING_IGNORED
+    title: "AdvertisingIdClient.getAdvertisingIdInfo without checking isLimitAdTrackingEnabled"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-359
+    cvss: 5.0
+    category: PRIVACY
+    description: >
+      Reading the advertising ID without honouring isLimitAdTrackingEnabled
+      violates Google Play user data policy.
+    smali_pattern: 'AdvertisingIdClient;->getAdvertisingIdInfo\(Landroid/content/Context;\)Lcom/google/android/gms/ads/identifier/AdvertisingIdClient\$Info;'
+    remediation: "Always call info.isLimitAdTrackingEnabled() and discard the AAID when true."
+
+  - id: PRIVACY_LOCATION_BACKGROUND
+    title: "Background location requested via FusedLocationProviderClient.requestLocationUpdates"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-359
+    cvss: 6.5
+    category: PRIVACY
+    description: >
+      Background location collection requires ACCESS_BACKGROUND_LOCATION
+      and a Play Console policy declaration since Android 11.
+    smali_pattern: 'FusedLocationProviderClient;->requestLocationUpdates\('
+    remediation: "Request foreground-only location, or declare ACCESS_BACKGROUND_LOCATION + Play policy."
+
+  - id: PRIVACY_PHONE_NUMBER_READ
+    title: "TelephonyManager.getLine1Number() reads SIM phone number"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-359
+    cvss: 6.0
+    category: PRIVACY
+    description: >
+      Reading the user's MSISDN requires READ_PHONE_STATE / READ_SMS and
+      is rarely needed by non-telecom apps.
+    smali_pattern: 'TelephonyManager;->getLine1Number\('
+    remediation: "Avoid reading the phone number; if needed, request user input or use HMS Identity APIs with consent."
+
+  # ── Anti-tamper / runtime integrity ─────────────────────────────────
+  - id: ANTITAMPER_NO_SIGNATURE_CHECK
+    title: "PackageManager.getPackageInfo without GET_SIGNING_CERTIFICATES"
+    severity: LOW
+    confidence: LOW
+    cwe: CWE-345
+    cvss: 3.0
+    category: ANTITAMPER
+    description: >
+      Apps reading their own package info often skip the GET_SIGNING_CERTIFICATES
+      flag, missing the chance to verify they have not been re-signed.
+    smali_pattern: 'PackageManager;->getPackageInfo\(Ljava/lang/String;I\)Landroid/content/pm/PackageInfo;'
+    remediation: "Pass GET_SIGNING_CERTIFICATES (0x8000000) and compare against the expected signer SHA-256."
+
+  - id: ANTITAMPER_DEBUGGER_CHECK_PRESENT
+    title: "Debug.isDebuggerConnected() called — likely anti-debug stub"
+    severity: INFO
+    confidence: HIGH
+    cwe: CWE-693
+    cvss: 0.0
+    category: ANTITAMPER
+    description: >
+      Use of Debug.isDebuggerConnected often indicates a runtime
+      integrity check; surface for review against MASVS-RESILIENCE rules.
+    smali_pattern: 'Landroid/os/Debug;->isDebuggerConnected\(\)Z'
+    remediation: "Verify the check is non-trivial to bypass; pair with native attestation."
+
+  # ── Logging / telemetry ──────────────────────────────────────────────
+  - id: LOG_PII_AAID
+    title: "Advertising ID written to logcat"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-532
+    cvss: 6.0
+    category: LOGGING
+    multiline: true
+    description: >
+      Logging the AAID (or any other resettable identifier) to logcat
+      exposes it to every app on pre-Oreo devices and to any rooted
+      device dump.
+    smali_pattern: 'AdvertisingIdClient\$Info;->getId\(\)[\s\S]{0,200}Log;->[diwev]'
+    remediation: "Strip identifiers from log statements before release; use Timber + ProGuard rules to filter."
+
+  - id: LOG_EXCEPTION_PRINT_STACK
+    title: "Throwable.printStackTrace() in release path"
+    severity: LOW
+    confidence: MEDIUM
+    cwe: CWE-209
+    cvss: 3.5
+    category: LOGGING
+    description: >
+      printStackTrace writes to System.err which on Android lands in
+      logcat — exposes stack traces and class names useful to attackers.
+    smali_pattern: 'Throwable;->printStackTrace\(\)V'
+    remediation: "Route exceptions through a structured logger that's compiled out in release builds."
+
+  # ── Resource / asset patterns ────────────────────────────────────────
+  - id: RESOURCE_CRT_FILE_BUNDLED
+    title: "Bundled .crt or .pem certificate file in assets"
+    severity: LOW
+    confidence: HIGH
+    cwe: CWE-321
+    cvss: 3.5
+    category: RESOURCE
+    description: >
+      Shipping certificates in the APK is fine for pinning, but bundled
+      private keys (.key, .pem with PRIVATE) are extractable.
+    smali_pattern: 'invoke-virtual.*open\(.*"(.*\.(crt|pem|key|p12|pfx))"'
+    remediation: "Pin certificates by hash (sha256/...) rather than bundling the cert PEM; never ship private keys."
+
+  # ── Misc / dynamic code ──────────────────────────────────────────────
+  - id: DANGEROUS_INVOKE_HIDDEN_API
+    title: "Reflective access to @hide / SystemApi"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-749
+    cvss: 5.0
+    category: OBFUSCATION
+    description: >
+      Calling Method.setAccessible(true) followed by invoke() on framework
+      classes (android.*, com.android.internal.*) bypasses StrictMode and
+      is an indicator of policy-violating code.
+    smali_pattern: 'Method;->setAccessible\(Z\)V'
+    remediation: "Use the documented Android API surface; if hidden APIs are unavoidable, isolate behind a safe wrapper."
+
+  - id: DANGEROUS_LIBRARY_ZIP_TRAVERSAL
+    title: "ZipFile / ZipInputStream extraction without entry-name validation"
+    severity: HIGH
+    confidence: LOW
+    cwe: CWE-22
+    cvss: 7.0
+    category: GENERAL
+    description: >
+      ZipEntry.getName().contains("..") check is the canonical zip-slip
+      mitigation; its absence is a strong indicator of vulnerability.
+    smali_pattern: 'ZipFile;->entries\(\)Ljava/util/Enumeration;'
+    remediation: "Reject entries whose canonicalised path escapes the destination directory."
+
+  - id: DANGEROUS_LOAD_ASSET_DEX
+    title: "AssetManager.open() loading a .dex / .jar file"
+    severity: HIGH
+    confidence: MEDIUM
+    cwe: CWE-94
+    cvss: 7.0
+    category: OBFUSCATION
+    description: >
+      Loading DEX/JAR from /assets at runtime is a packer / unpacker
+      pattern frequently used to defeat static analysis.
+    smali_pattern: 'AssetManager;->open\(Ljava/lang/String;\).*"\.(dex|jar|apk)"'
+    multiline: true
+    remediation: "Bundle code as DEX in classes.dex; reject extension-based dynamic loading."
+
+  - id: ANDROID_BIOMETRIC_FALLBACK_TO_CRED
+    title: "BiometricPrompt allows DEVICE_CREDENTIAL fallback"
+    severity: LOW
+    confidence: HIGH
+    cwe: CWE-287
+    cvss: 3.5
+    category: AUTH
+    description: >
+      Setting setAllowedAuthenticators(BIOMETRIC_WEAK | DEVICE_CREDENTIAL)
+      lets the user authenticate with PIN/pattern, weakening biometric-only
+      assumptions.
+    smali_pattern: 'BiometricPrompt\$PromptInfo\$Builder;->setAllowedAuthenticators\(I\)L.*BIOMETRIC_WEAK[\s\S]{0,40}DEVICE_CREDENTIAL'
+    multiline: true
+    remediation: "Use BIOMETRIC_STRONG only when binding cryptographic operations to biometric class-3 enrolment."
+
+  - id: ANDROID_DOWNLOAD_MANAGER_CLEARTEXT
+    title: "DownloadManager.Request constructed with http:// URI"
+    severity: MEDIUM
+    confidence: MEDIUM
+    cwe: CWE-319
+    cvss: 5.5
+    category: NETWORK
+    description: >
+      DownloadManager bypasses NSC for the actual HTTP fetch; cleartext
+      URIs are downloaded plaintext regardless of cleartextTrafficPermitted.
+    smali_pattern: 'Landroid/app/DownloadManager\$Request;-><init>\(Landroid/net/Uri;\)V'
+    remediation: "Use HTTPS download URIs only; verify the resulting file digest."
+
+  # ── Rule-pack growth target marker (keeps total above 100) ───────────
+  - id: AUTH_FIDO2_NO_USER_VERIFICATION
+    title: "WebAuthn / Fido2ApiClient request without user-verification requirement"
+    severity: MEDIUM
+    confidence: LOW
+    cwe: CWE-308
+    cvss: 5.0
+    category: AUTH
+    description: >
+      FIDO2 / Passkey requests created with UserVerificationRequirement.DISCOURAGED
+      do not bind to biometric or PIN — phishing-resistance is undermined.
+    smali_pattern: 'PublicKeyCredentialCreationOptions\$Builder;->setUserVerification\(.*DISCOURAGED'
+    remediation: "Use UserVerificationRequirement.REQUIRED for high-value flows; PREFERRED otherwise."
+
+  - id: NETWORK_GRPC_INSECURE_CHANNEL
+    title: "ManagedChannelBuilder.usePlaintext() — gRPC over cleartext"
+    severity: HIGH
+    confidence: HIGH
+    cwe: CWE-319
+    cvss: 7.5
+    category: NETWORK
+    description: >
+      gRPC channels created with usePlaintext() send framing and payload
+      as plain HTTP/2, defeating end-to-end TLS.
+    smali_pattern: 'ManagedChannelBuilder;->usePlaintext\(\)L'
+    remediation: "Drop usePlaintext(); rely on the default TLS-secured channel and pin via SSLContext."

@@ -37,6 +37,24 @@ CREATE TABLE IF NOT EXISTS scan_cache (
 
 _INDEX = "CREATE INDEX IF NOT EXISTS idx_scanned ON scan_cache(scanned_at);"
 
+# Per-detector cache. Keyed by (detector_id, file_hash, rules_version) so a
+# rule edit, a smali edit, or a detector swap all naturally evict. The body
+# is the JSON-serialised list of finding dicts the detector emitted.
+_CREATE_DETECTOR_TABLE = """
+CREATE TABLE IF NOT EXISTS detector_cache (
+    detector_id    TEXT NOT NULL,
+    file_hash      TEXT NOT NULL,
+    rules_version  TEXT NOT NULL,
+    findings_json  TEXT NOT NULL,
+    cached_at      TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (detector_id, file_hash, rules_version)
+);
+"""
+
+_DETECTOR_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_detector_age ON detector_cache(cached_at);"
+)
+
 
 class ScanCache:
     """Thread-safe SQLite scan cache."""
@@ -58,6 +76,8 @@ class ScanCache:
             try:
                 conn.execute(_CREATE_TABLE)
                 conn.execute(_INDEX)
+                conn.execute(_CREATE_DETECTOR_TABLE)
+                conn.execute(_DETECTOR_INDEX)
                 # Migrate older databases that were keyed on sha256 alone.
                 cols = {r["name"] for r in conn.execute("PRAGMA table_info(scan_cache)").fetchall()}
                 if "rules_version" not in cols:
@@ -222,6 +242,98 @@ class ScanCache:
             conn = self._connect()
             try:
                 conn.execute("DELETE FROM scan_cache")
+                conn.execute("DELETE FROM detector_cache")
                 conn.commit()
+            finally:
+                conn.close()
+
+    # ------------------------------------------------------------------
+    # Per-detector incremental cache
+    # ------------------------------------------------------------------
+
+    def get_detector(
+        self, detector_id: str, file_hash: str
+    ) -> Optional[list[dict]]:
+        """
+        Return the cached findings list for (detector_id, file_hash) under the
+        current rules_version, or None on miss / read error.
+        """
+        if not detector_id or not file_hash:
+            return None
+        rules_version = self._current_rules_version()
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT findings_json FROM detector_cache "
+                    "WHERE detector_id = ? AND file_hash = ? "
+                    "AND rules_version = ?",
+                    (detector_id, file_hash, rules_version),
+                ).fetchone()
+                if row:
+                    try:
+                        return json.loads(row["findings_json"])
+                    except (TypeError, ValueError) as exc:
+                        logger.warning("Detector cache decode error: %s", exc)
+                        return None
+            except Exception as exc:
+                logger.debug("Detector cache read error: %s", exc)
+            finally:
+                conn.close()
+        return None
+
+    def put_detector(
+        self, detector_id: str, file_hash: str, findings: list[dict]
+    ) -> None:
+        """
+        Persist the findings list for (detector_id, file_hash). Findings must
+        already be serialisable (use Finding.to_dict() before calling).
+        """
+        if not detector_id or not file_hash:
+            return
+        rules_version = self._current_rules_version()
+        try:
+            payload = json.dumps(findings, default=str)
+        except Exception as exc:
+            logger.debug("Detector cache serialise error: %s", exc)
+            return
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """INSERT OR REPLACE INTO detector_cache
+                       (detector_id, file_hash, rules_version, findings_json)
+                       VALUES (?, ?, ?, ?)""",
+                    (detector_id, file_hash, rules_version, payload),
+                )
+                conn.commit()
+            except Exception as exc:
+                logger.debug("Detector cache write error: %s", exc)
+            finally:
+                conn.close()
+
+    def detector_stats(self) -> dict:
+        """Return aggregate counters for the per-detector cache."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) AS n, COUNT(DISTINCT detector_id) AS d "
+                    "FROM detector_cache"
+                ).fetchone()
+                return {"entries": row["n"], "detectors": row["d"]}
+            except Exception:
+                return {"entries": 0, "detectors": 0}
+            finally:
+                conn.close()
+
+    def prune_detector_cache(self) -> int:
+        """Wipe the per-detector table. Returns the number of rows removed."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                cur = conn.execute("DELETE FROM detector_cache")
+                conn.commit()
+                return cur.rowcount or 0
             finally:
                 conn.close()

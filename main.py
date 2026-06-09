@@ -41,8 +41,24 @@ def cli():
 _SEVERITY_RANK = {"INFO": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4, "CRITICAL": 5}
 
 
+_APK_BUNDLE_EXTS = (".apk", ".aab", ".xapk", ".apks", ".apkm")
+
+
+def _accepts_apk_or_bundle(ctx, param, value):
+    """Click validator that lets users pass APKs or any supported bundle."""
+    if value is None:
+        return value
+    p = Path(value)
+    if p.suffix.lower() not in _APK_BUNDLE_EXTS:
+        raise click.BadParameter(
+            f"expected one of {', '.join(_APK_BUNDLE_EXTS)}, got {p.suffix}"
+        )
+    return str(p)
+
+
 @cli.command()
-@click.argument("apk_path", type=click.Path(exists=True, dir_okay=False))
+@click.argument("apk_path", type=click.Path(exists=True, dir_okay=False),
+                callback=_accepts_apk_or_bundle)
 @click.option("--output", "-o", default="./apkanalyzer_report", help="Output directory")
 @click.option(
     "--confidence", "-c",
@@ -62,7 +78,17 @@ _SEVERITY_RANK = {"INFO": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4, "CRITICAL": 5}
     default="all",
     help="Output format (default: all)",
 )
-@click.option("--no-cache", is_flag=True, help="Skip incremental scan cache")
+@click.option("--no-cache", is_flag=True, help="Skip the full-report scan cache")
+@click.option(
+    "--no-detector-cache", is_flag=True,
+    help="Skip the per-detector incremental cache (per-method, per-detector "
+         "results keyed by smali hash). The full-report cache is independent.",
+)
+@click.option(
+    "--jadx/--no-jadx", "use_jadx", default=True,
+    help="Use jadx (when on PATH) to decompile to Java for additional rule "
+         "matching. Disabled automatically if jadx is missing.",
+)
 @click.option("--plugins-dir", default=None, help="Directory containing custom detector plugins")
 @click.option(
     "--sources", "extra_source_files", multiple=True,
@@ -73,6 +99,13 @@ _SEVERITY_RANK = {"INFO": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4, "CRITICAL": 5}
     "--sinks", "extra_sink_files", multiple=True,
     type=click.Path(exists=True, dir_okay=False),
     help="JSON/YAML file(s) with extra TaintSink specs (repeatable).",
+)
+@click.option(
+    "--native-summaries", "extra_native_summary_files", multiple=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="JSON/YAML file(s) with extra NativeSummary specs (repeatable). "
+         "Bridges JNI calls so native decrypt/encrypt/hash/source/sink "
+         "patterns appear in the dataflow.",
 )
 @click.option(
     "--fail-on",
@@ -107,7 +140,9 @@ _SEVERITY_RANK = {"INFO": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4, "CRITICAL": 5}
 )
 @click.option("--verbose", "-v", is_flag=True)
 def scan(apk_path, output, confidence, no_apktool, taint_depth, output_format,
-         no_cache, plugins_dir, extra_source_files, extra_sink_files,
+         no_cache, no_detector_cache, use_jadx, plugins_dir,
+         extra_source_files, extra_sink_files,
+         extra_native_summary_files,
          fail_on, masvs, baseline, fail_on_new, write_baseline, verbose):
     """Scan an APK for security vulnerabilities."""
     _setup_logging(verbose)
@@ -120,6 +155,7 @@ def scan(apk_path, output, confidence, no_apktool, taint_depth, output_format,
     )
     from apkanalyzer.scoring.masvs import filter_by_profile
     from apkanalyzer.analysis.taint.loader import load_specs
+    from apkanalyzer.analysis.taint.native_summaries import load_native_summaries
     from pathlib import Path as _Path
 
     console.print(f"\n[bold]APKAnalyzer[/bold] — scanning [cyan]{apk_path}[/cyan]\n")
@@ -133,6 +169,7 @@ def scan(apk_path, output, confidence, no_apktool, taint_depth, output_format,
     extra_sources, extra_sinks, extra_sanitizers = load_specs(
         list(extra_source_files) + list(extra_sink_files),
     )
+    extra_native_summaries = load_native_summaries(list(extra_native_summary_files))
 
     pipeline_kwargs = dict(
         confidence=confidence,
@@ -143,13 +180,18 @@ def scan(apk_path, output, confidence, no_apktool, taint_depth, output_format,
         extra_sources=extra_sources,
         extra_sinks=extra_sinks,
         extra_sanitizers=extra_sanitizers,
+        extra_native_summaries=extra_native_summaries,
         masvs_profile=masvs,
+        enable_jadx=use_jadx,
+        enable_detector_cache=not no_detector_cache,
     )
 
     # Cache: include extra-spec fingerprints in the cache key by skipping the
     # cache when user-supplied specs are present (they're typically transient
     # and not worth a more elaborate cache-key).
-    use_cache = not no_cache and not (extra_sources or extra_sinks or extra_sanitizers)
+    use_cache = not no_cache and not (
+        extra_sources or extra_sinks or extra_sanitizers or extra_native_summaries
+    )
     if use_cache:
         cache = ScanCache()
         cached = cache.get(apk_path)
@@ -246,7 +288,9 @@ def _compute_exit_code(
 
 def _run_pipeline(apk_path, output, confidence, no_apktool, taint_depth, verbose,
                   plugins_dir=None, extra_sources=None, extra_sinks=None,
-                  extra_sanitizers=None, masvs_profile=None):
+                  extra_sanitizers=None, extra_native_summaries=None,
+                  masvs_profile=None, enable_jadx=True,
+                  enable_detector_cache=True):
     from apkanalyzer.pipeline.orchestrator import AnalysisPipeline
     pipeline = AnalysisPipeline(
         apk_path=apk_path,
@@ -258,7 +302,10 @@ def _run_pipeline(apk_path, output, confidence, no_apktool, taint_depth, verbose
         extra_sources=extra_sources,
         extra_sinks=extra_sinks,
         extra_sanitizers=extra_sanitizers,
+        extra_native_summaries=extra_native_summaries,
         masvs_profile=masvs_profile,
+        enable_jadx=enable_jadx,
+        enable_detector_cache=enable_detector_cache,
     )
     try:
         return pipeline.run()
@@ -455,6 +502,40 @@ def compare(old_apk, new_apk, output, confidence, verbose):
     console.print(f"  HTML diff  → [cyan]{html_path}[/cyan]")
 
     sys.exit(1 if s["regression"] else 0)
+
+
+@cli.group()
+def cache():
+    """Manage APKAnalyzer's on-disk caches."""
+
+
+@cache.command("stats")
+def cache_stats():
+    """Print scan-cache + detector-cache counters."""
+    from apkanalyzer.cache.scan_cache import ScanCache
+    sc = ScanCache()
+    full = len(sc.list_entries())
+    det = sc.detector_stats()
+    console.print(f"  Full-report entries:   [cyan]{full}[/cyan]")
+    console.print(f"  Detector-cache rows:   [cyan]{det.get('entries', 0)}[/cyan]")
+    console.print(f"  Distinct detectors:    [cyan]{det.get('detectors', 0)}[/cyan]")
+
+
+@cache.command("prune-detector")
+def cache_prune_detector():
+    """Wipe the per-detector cache (full-report cache untouched)."""
+    from apkanalyzer.cache.scan_cache import ScanCache
+    n = ScanCache().prune_detector_cache()
+    console.print(f"  Pruned [cyan]{n}[/cyan] detector-cache rows")
+
+
+@cache.command("clear")
+@click.confirmation_option(prompt="Wipe ALL cached scan reports and detector results?")
+def cache_clear():
+    """Wipe both the full-report cache AND the per-detector cache."""
+    from apkanalyzer.cache.scan_cache import ScanCache
+    ScanCache().clear()
+    console.print("  All caches cleared")
 
 
 @cli.command()

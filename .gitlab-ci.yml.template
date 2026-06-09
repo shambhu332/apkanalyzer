@@ -1,0 +1,51 @@
+# APKAnalyzer GitLab CI template.
+# Copy to `.gitlab-ci.yml` (or `include:` it) at the repo root and override
+# `APK_PATH`. The job emits a SARIF file consumed by GitLab's SAST UI plus a
+# JSON+HTML report kept as build artifacts for ~1 week.
+#
+# Required: a Python 3.11+ image. Falls back gracefully when jadx is missing.
+
+stages:
+  - test
+
+variables:
+  APK_PATH: "build/outputs/apk/release/app-release.apk"
+  APKANALYZER_FAIL_ON: "HIGH"
+  APKANALYZER_MASVS: "L1"
+
+apkanalyzer:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends git default-jre-headless unzip
+    # JADX bridge — optional. Comment out if you don't need Java-rule coverage.
+    - apt-get install -y -qq jadx || echo "jadx unavailable; smali rules only"
+    - pip install --no-cache-dir --upgrade pip
+    - pip install --no-cache-dir -e .
+  script:
+    - mkdir -p reports
+    - >-
+      python -m main scan "$APK_PATH"
+      --output reports
+      --confidence LOW
+      --masvs "$APKANALYZER_MASVS"
+      --fail-on "$APKANALYZER_FAIL_ON"
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - reports/report.json
+      - reports/report.html
+      - reports/report.sarif
+      - reports/sbom.cdx.json
+    reports:
+      sast: reports/report.sarif
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/*.apk"
+        - "**/*.aab"
+        - "rules/**/*"
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual

@@ -76,6 +76,20 @@ _INLINE_TEMPLATE = """<!DOCTYPE html>
   .perm { font-size: 11px; background: var(--border); padding: 2px 8px; border-radius: 4px; }
   .perm.danger { background: rgba(214,48,49,0.2); color: var(--critical); }
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 32px; }
+  .behaviors { margin-bottom: 24px; }
+  .behavior { background: var(--surface); border: 1px solid var(--border);
+              border-left-width: 4px; border-radius: 6px; padding: 12px 16px;
+              margin-bottom: 8px; }
+  .behavior.CRITICAL { border-left-color: var(--critical); }
+  .behavior.HIGH { border-left-color: var(--high); }
+  .behavior.MEDIUM { border-left-color: var(--medium); }
+  .behavior.LOW { border-left-color: var(--low); }
+  .behavior-name { font-weight: 600; font-size: 14px; }
+  .behavior-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .behavior-desc { font-size: 13px; margin-top: 6px; color: var(--text); }
+  .behavior-rules { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .behavior-rules code { background: var(--bg); padding: 1px 4px; border-radius: 3px;
+                         font-size: 11px; margin-right: 4px; }
 </style>
 </head>
 <body>
@@ -99,6 +113,25 @@ _INLINE_TEMPLATE = """<!DOCTYPE html>
       <div style="font-size:11px;color:var(--muted);">A=clean · B=low · C=medium · D=high · F=critical</div>
     </div>
   </div>
+
+  {% if malware_behaviors %}
+  <div class="behaviors">
+    <div class="field-label" style="margin-bottom:8px;">Malware Behaviour Signals
+      ({{ malware_behaviors|length }} detected)</div>
+    {% for b in malware_behaviors %}
+    <div class="behavior {{ b.severity }}">
+      <div class="behavior-name">{{ b.name }}
+        <span class="sev {{ b.severity }}" style="margin-left:6px;">{{ b.severity }}</span>
+        <span class="behavior-meta">weight {{ b.weight }} · {{ b.mitre_tactic }}</span>
+      </div>
+      <div class="behavior-desc">{{ b.description }}</div>
+      <div class="behavior-rules">Triggered by:
+        {% for rid in b.contributing_rule_ids %}<code>{{ rid }}</code>{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <!-- Summary badges -->
   <div class="summary-grid">

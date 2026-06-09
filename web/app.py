@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import collections
 import hmac
+import html
 import json
 import logging
 import os
@@ -123,10 +124,19 @@ _RATE_LIMIT_HITS: dict[str, collections.deque] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
 
 
+_TRUST_PROXY = os.environ.get("APKANALYZER_TRUST_PROXY", "").lower() in (
+    "1", "true", "yes",
+)
+
+
 def _client_ip() -> str:
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",", 1)[0].strip()
+    # X-Forwarded-For is fully attacker-controllable when we're not behind a
+    # trusted reverse proxy: anyone can spoof the header to dodge per-IP rate
+    # limits. Honour it only when the operator opts in via APKANALYZER_TRUST_PROXY=1.
+    if _TRUST_PROXY:
+        fwd = request.headers.get("X-Forwarded-For", "")
+        if fwd:
+            return fwd.split(",", 1)[0].strip()
     return request.remote_addr or "unknown"
 
 
@@ -374,7 +384,9 @@ def history():
             ) if ts else "—",
         })
 
-    html = """<!DOCTYPE html>
+    # Local accumulator is named `page` (not `html`) so it doesn't shadow the
+    # stdlib `html` module we use below for escaping user-controlled fields.
+    page = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -403,32 +415,48 @@ def history():
 <div class="container">
 """
     if not entries:
-        html += '<div class="empty">No completed scans yet.</div>'
+        page += '<div class="empty">No completed scans yet.</div>'
     else:
-        html += """<table>
+        page += """<table>
 <tr>
   <th>Package</th><th>Risk</th><th>Total</th><th>Critical</th>
   <th>High</th><th>SDK</th><th>Duration</th><th>Scanned</th><th>Actions</th>
 </tr>"""
         for e in entries:
-            grade = e["risk_grade"]
-            html += f"""<tr>
-  <td>{e['package']}</td>
+            # Every field below originates in user-controlled APK metadata
+            # (package name, manifest SDK strings, etc). Without escaping a
+            # crafted package name like `<script>...</script>` would execute
+            # in the operator's browser the moment they open /history.
+            grade = html.escape(str(e["risk_grade"]))
+            esc = {
+                "package":    html.escape(str(e["package"])),
+                "total":      html.escape(str(e["total"])),
+                "critical":   html.escape(str(e["critical"])),
+                "high":       html.escape(str(e["high"])),
+                "target_sdk": html.escape(str(e["target_sdk"])),
+                "duration":   html.escape(str(e["duration"])),
+                "scanned_at": html.escape(str(e["scanned_at"])),
+                # scan_id is server-generated UUID4, but escape defensively
+                # in case the schema is ever loosened.
+                "scan_id":    html.escape(str(e["scan_id"])),
+            }
+            page += f"""<tr>
+  <td>{esc['package']}</td>
   <td><span class="grade grade-{grade}">{grade}</span></td>
-  <td>{e['total']}</td>
-  <td style="color:#d63031;">{e['critical']}</td>
-  <td style="color:#e17055;">{e['high']}</td>
-  <td>{e['target_sdk']}</td>
-  <td>{e['duration']}s</td>
-  <td>{e['scanned_at']}</td>
+  <td>{esc['total']}</td>
+  <td style="color:#d63031;">{esc['critical']}</td>
+  <td style="color:#e17055;">{esc['high']}</td>
+  <td>{esc['target_sdk']}</td>
+  <td>{esc['duration']}s</td>
+  <td>{esc['scanned_at']}</td>
   <td>
-    <a href="/report/{e['scan_id']}">HTML</a> &nbsp;
-    <a href="/download/{e['scan_id']}">JSON</a>
+    <a href="/report/{esc['scan_id']}">HTML</a> &nbsp;
+    <a href="/download/{esc['scan_id']}">JSON</a>
   </td>
 </tr>"""
-        html += "</table>"
-    html += "</div></body></html>"
-    return html
+        page += "</table>"
+    page += "</div></body></html>"
+    return page
 
 
 @app.route("/download/<scan_id>")
@@ -521,6 +549,64 @@ def api_owasp():
     except Exception:
         items = []
     return jsonify(items)
+
+
+# ── OpenAPI / Swagger UI ───────────────────────────────────────────────────
+# Spec lives in web/openapi.yaml; loaded once at startup so the JSON endpoint
+# is a constant-cost dict serialisation. Reload requires a process restart,
+# matching how rules and other static config are handled in this app.
+_OPENAPI_PATH = Path(__file__).parent / "openapi.yaml"
+_OPENAPI_DOC: dict | None = None
+
+
+def _load_openapi() -> dict:
+    """Load and cache the OpenAPI document. Returns {} if PyYAML or the
+    file is unavailable (the /docs UI degrades gracefully)."""
+    global _OPENAPI_DOC
+    if _OPENAPI_DOC is not None:
+        return _OPENAPI_DOC
+    try:
+        import yaml  # PyYAML is already a hard dep via apkanalyzer/rules
+        _OPENAPI_DOC = yaml.safe_load(_OPENAPI_PATH.read_text()) or {}
+    except Exception as exc:
+        log.warning("OpenAPI load failed: %s", exc)
+        _OPENAPI_DOC = {}
+    return _OPENAPI_DOC
+
+
+@app.route("/openapi.json")
+def openapi_json():
+    """Serve the OpenAPI 3.1 spec as JSON for tooling that prefers JSON."""
+    return jsonify(_load_openapi())
+
+
+@app.route("/docs")
+def docs():
+    """Swagger UI rendered against /openapi.json. CDN-hosted bundle keeps
+    the server payload tiny (~3 KB of HTML)."""
+    return Response(
+        """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>APKAnalyzer API — Swagger UI</title>
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body style="margin:0">
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: '/openapi.json',
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+    });
+  </script>
+</body>
+</html>""",
+        mimetype="text/html",
+    )
 
 
 @app.route("/sarif/<scan_id>")

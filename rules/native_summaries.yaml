@@ -1,0 +1,56 @@
+# JNI / native taint summaries.
+#
+# Each entry tells the taint engine what happens when control crosses
+# the Java -> native boundary. The bestiary is name-driven: we do NOT
+# disassemble the .so; we *summarise* the function based on its
+# (class_pattern, method_pattern) signature.
+#
+# Schema
+# ------
+#   - class:           Dalvik class descriptor or "*" wildcard
+#     method:          method name or "*" wildcard
+#     propagate_args:  [arg_idx, ...]  args whose taint flows to return
+#     taints_return:   ["LABEL"]       labels stamped on return value
+#     sanitises_args:  [[arg_idx, "SAN_LABEL"], ...]
+#     sinks_args:      [[arg_idx, "SINK_LABEL"], ...]
+#
+# The defaults compiled into apkanalyzer/analysis/taint/native_summaries.py
+# already cover generic decrypt/encrypt/hash patterns; entries here extend
+# that list. Add APK-specific overrides for proprietary JNI bridges.
+native_summaries:
+  # --- Bouncy Castle native acceleration (NDK builds) -----------------
+  - class: "Lorg/bouncycastle/jce/provider/BouncyCastleProvider;"
+    method: "*"
+    propagate_args: [0]
+
+  # --- Conscrypt native crypto -----------------------------------------
+  - class: "Lcom/google/android/gms/org/conscrypt/NativeCrypto;"
+    method: "*"
+    propagate_args: [0]
+
+  # --- libsodium-jni ---------------------------------------------------
+  - class: "Lorg/libsodium/jni/Sodium;"
+    method: "crypto_box_easy"
+    propagate_args: [0]
+  - class: "Lorg/libsodium/jni/Sodium;"
+    method: "crypto_secretbox_easy"
+    propagate_args: [0]
+  - class: "Lorg/libsodium/jni/Sodium;"
+    method: "crypto_pwhash_str"
+    sanitises_args: [[0, "HMAC_DIGEST"]]
+
+  # --- SQLCipher native bindings (queries pass through native) --------
+  - class: "Lnet/sqlcipher/database/SQLiteDatabase;"
+    method: "rawQuery"
+    propagate_args: [0]
+    sinks_args: [[0, "SQL_INJECT"]]
+
+  # --- Realm core (popular obfuscated DB; payload reaches native) -----
+  - class: "Lio/realm/internal/OsResults;"
+    method: "nativeWhere"
+    propagate_args: [1]
+
+  # --- Native HTTP wrappers occasionally seen in payment SDKs ---------
+  - class: "Lcom/squareup/okhttp/internal/Platform;"
+    method: "trustManager"
+    taints_return: ["NETWORK_IN"]

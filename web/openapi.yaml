@@ -1,0 +1,446 @@
+openapi: 3.1.0
+info:
+  title: APKAnalyzer Web API
+  version: "1.0.0"
+  description: |
+    HTTP surface of the APKAnalyzer Flask UI. Designed for headless
+    integration: upload an APK, poll progress (or subscribe via SSE),
+    download the JSON / SARIF report.
+
+    Authentication is two-factor by design when both knobs are configured:
+      * `Authorization: Bearer <token>` — required when
+        `APKANALYZER_API_TOKEN` is set on the server.
+      * `X-CSRF-Token` echo of the `apkanalyzer_csrf` cookie — required on
+        every mutating request unless `APKANALYZER_DISABLE_CSRF=1`.
+  contact:
+    name: APKAnalyzer
+    url: https://github.com/anthropics/apkanalyzer
+
+servers:
+  - url: http://localhost:5005
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Set `APKANALYZER_API_TOKEN=<token>` in the server environment, then
+        send `Authorization: Bearer <token>`. When the env var is unset the
+        server is unauthenticated (intended for local-only dev).
+    csrfCookie:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: |
+        Echo of the `apkanalyzer_csrf` cookie value (double-submit pattern).
+        Required for `POST /scan`. Disable via `APKANALYZER_DISABLE_CSRF=1`
+        when bearer auth alone is sufficient (e.g. server-to-server).
+
+  schemas:
+    Severity:
+      type: string
+      enum: [INFO, LOW, MEDIUM, HIGH, CRITICAL]
+    Confidence:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+
+    Finding:
+      type: object
+      required: [rule_id, title, severity, confidence, category]
+      properties:
+        rule_id:        { type: string, example: "CRYPTO_AES_ECB" }
+        title:          { type: string }
+        description:    { type: string }
+        severity:       { $ref: "#/components/schemas/Severity" }
+        confidence:     { $ref: "#/components/schemas/Confidence" }
+        category:       { type: string, example: "CRYPTO" }
+        location:
+          type: object
+          properties:
+            class:  { type: string }
+            method: { type: string }
+            file:   { type: string }
+            line:   { type: integer }
+        evidence:       { type: string }
+        remediation:    { type: string }
+        cwe_id:         { type: string, example: "CWE-327" }
+        cvss:           { type: number, format: float }
+        cvss_vector:    { type: string }
+        owasp_category: { type: string, example: "M5" }
+        baseline_status:
+          type: string
+          enum: [new, known]
+          description: Set when the report was diffed against `--baseline`.
+        taint_flow:
+          type: object
+          description: Present only on findings emitted by the taint engine.
+          properties:
+            source:
+              type: object
+              properties:
+                method: { type: string }
+                label:  { type: string }
+                offset: { type: integer }
+            sink:
+              type: object
+              properties:
+                method: { type: string }
+                label:  { type: string }
+                offset: { type: integer }
+            call_chain:
+              type: array
+              items: { type: string }
+            transforms:
+              type: array
+              items: { type: string }
+
+    BehaviorScore:
+      type: object
+      required: [name, weight, severity]
+      properties:
+        name:          { type: string, example: "ROOT_DETECT_AND_EXEC" }
+        description:   { type: string }
+        weight:        { type: integer }
+        severity:      { $ref: "#/components/schemas/Severity" }
+        mitre_tactic:  { type: string, example: "TA0004 — Privilege Escalation" }
+        contributing_rule_ids:
+          type: array
+          items: { type: string }
+
+    Summary:
+      type: object
+      properties:
+        total:       { type: integer }
+        risk_grade:  { type: string, enum: [A, B, C, D, F] }
+        by_severity:
+          type: object
+          additionalProperties: { type: integer }
+        by_category:
+          type: object
+          additionalProperties: { type: integer }
+        by_owasp:
+          type: object
+          additionalProperties: { type: integer }
+
+    Metadata:
+      type: object
+      properties:
+        apk_path:       { type: string }
+        filename:       { type: string }
+        package:        { type: string }
+        min_sdk:        { type: integer, nullable: true }
+        target_sdk:     { type: integer, nullable: true }
+        permissions:
+          type: array
+          items: { type: string }
+        dangerous_permissions:
+          type: array
+          items: { type: string }
+        analysis_duration_seconds: { type: number, format: float }
+        bundle_kind:    { type: string, nullable: true }
+        merged_splits:
+          type: array
+          items: { type: string }
+
+    Report:
+      type: object
+      required: [metadata, summary, findings]
+      properties:
+        metadata: { $ref: "#/components/schemas/Metadata" }
+        summary:  { $ref: "#/components/schemas/Summary" }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+        malware_behaviors:
+          type: array
+          items: { $ref: "#/components/schemas/BehaviorScore" }
+
+    ScanAck:
+      type: object
+      required: [scan_id]
+      properties:
+        scan_id:   { type: string, format: uuid }
+        cache_hit: { type: boolean }
+
+    HistoryEntry:
+      type: object
+      properties:
+        scan_id:    { type: string, format: uuid }
+        package:    { type: string }
+        filename:   { type: string }
+        target_sdk: { type: string, nullable: true }
+        min_sdk:    { type: string, nullable: true }
+        grade:      { type: string }
+        total:      { type: integer }
+        critical:   { type: integer }
+        high:       { type: integer }
+        medium:     { type: integer }
+        low:        { type: integer }
+        duration:   { type: integer }
+        scanned_at: { type: string }
+
+    Stats:
+      type: object
+      properties:
+        total_scans:    { type: integer }
+        total_findings: { type: integer }
+        by_grade:
+          type: object
+          additionalProperties: { type: integer }
+        by_severity:
+          type: object
+          additionalProperties: { type: integer }
+        by_owasp:
+          type: object
+          additionalProperties: { type: integer }
+        recent:
+          type: array
+          items:
+            type: object
+            properties:
+              scan_id:    { type: string }
+              package:    { type: string }
+              grade:      { type: string }
+              total:      { type: integer }
+              scanned_at: { type: string }
+
+    OwaspMapping:
+      type: object
+      properties:
+        code:  { type: string, example: "M5" }
+        title: { type: string, example: "Insufficient Cryptography" }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+paths:
+  /:
+    get:
+      summary: Landing page (HTML upload form)
+      description: |
+        Renders the upload form and sets the `apkanalyzer_csrf` cookie used
+        by the double-submit CSRF check on `POST /scan`.
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html: {}
+
+  /scan:
+    post:
+      summary: Submit an APK and start an asynchronous scan
+      security:
+        - bearerAuth: []
+          csrfCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [apk]
+              properties:
+                apk:
+                  type: string
+                  format: binary
+                  description: The APK file payload
+                confidence:
+                  type: string
+                  enum: [HIGH, MEDIUM, LOW]
+                  default: LOW
+                taint_depth:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+      responses:
+        "200":
+          description: Scan accepted; use scan_id with /progress, /result, /report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanAck" }
+        "400":
+          description: Malformed upload (missing file, wrong extension, bad magic bytes)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Bearer token missing or invalid
+        "403":
+          description: CSRF token missing or mismatched
+        "429":
+          description: Per-IP rate limit exceeded
+
+  /progress/{scan_id}:
+    get:
+      summary: Server-Sent Events stream of scan progress
+      parameters:
+        - in: path
+          name: scan_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: |
+            text/event-stream of JSON-encoded events. Event types:
+              * `progress` — `{stage, detail, pct}`
+              * `meta`     — `{package, target_sdk, min_sdk}` (one-shot)
+              * `done`     — `{summary, scan_id}` (terminal)
+              * `error`    — `{message}` (terminal)
+              * `ping`     — heartbeat (keep-alive only)
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "404":
+          description: Unknown scan_id
+
+  /result/{scan_id}:
+    get:
+      summary: Retrieve the full JSON report (or running status)
+      parameters:
+        - in: path
+          name: scan_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Final report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "202":
+          description: Scan still running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [running] }
+        "404":
+          description: Unknown scan_id
+        "500":
+          description: Scan errored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /report/{scan_id}:
+    get:
+      summary: Interactive HTML report
+      parameters:
+        - in: path
+          name: scan_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: HTML report
+          content:
+            text/html: {}
+        "404":
+          description: Report not ready or unknown scan_id
+
+  /history:
+    get:
+      summary: HTML page listing every completed scan
+      responses:
+        "200":
+          description: HTML table
+          content:
+            text/html: {}
+
+  /download/{scan_id}:
+    get:
+      summary: Download report.json as an attachment
+      parameters:
+        - in: path
+          name: scan_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: JSON report download
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404":
+          description: Report not found
+
+  /api/stats:
+    get:
+      summary: Aggregate cross-scan statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+
+  /api/scans:
+    get:
+      summary: Machine-readable list of completed scans
+      responses:
+        "200":
+          description: Array of history entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HistoryEntry" }
+
+  /api/owasp:
+    get:
+      summary: OWASP MASVS / Mobile Top-10 reference table
+      responses:
+        "200":
+          description: Mapping of code → title
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OwaspMapping" }
+
+  /sarif/{scan_id}:
+    get:
+      summary: SARIF v2.1 export (for GitHub Code Scanning ingestion)
+      parameters:
+        - in: path
+          name: scan_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: SARIF v2.1 file
+          content:
+            application/sarif+json:
+              schema: { type: object }
+        "404":
+          description: Report not found
+        "500":
+          description: SARIF generation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /openapi.json:
+    get:
+      summary: This OpenAPI spec, rendered as JSON
+      responses:
+        "200":
+          description: OpenAPI document
+          content:
+            application/json:
+              schema: { type: object }
+
+  /docs:
+    get:
+      summary: Swagger UI for this OpenAPI spec
+      responses:
+        "200":
+          description: HTML
+          content:
+            text/html: {}

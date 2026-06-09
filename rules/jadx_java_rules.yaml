@@ -1,0 +1,106 @@
+# Rules that only make sense against jadx-decompiled Java sources.
+# Smali bytecode loses readable Kotlin lambda capture, coroutine state-machine
+# field names, and sealed-class deserialisation glue, so these patterns target
+# the Java surface that jadx reconstructs. The orchestrator only invokes these
+# when `--jadx` is on AND the jadx binary is available.
+rules:
+
+  - id: KOTLIN_LAMBDA_CAPTURES_PASSWORD
+    title: Kotlin lambda captures variable named password/secret/token
+    description: >
+      A captured outer variable named password/secret/token is referenced from
+      within a lambda. jadx commonly preserves these as `final String password`
+      synthetic fields on the generated `$Lambda$N` class. Lambdas often outlive
+      their enclosing scope and end up in coroutine continuations on disk,
+      defeating the assumption that the secret only lives on the JVM stack.
+    severity: MEDIUM
+    confidence: MEDIUM
+    category: PRIVACY
+    cwe: CWE-200
+    cvss: 5.5
+    language: java
+    multiline: true
+    java_pattern: 'final\s+(?:String|char\[\])\s+(password|secret|token|api_?key)[\s\S]{0,400}\$Lambda\$'
+    remediation: |
+      Wipe the captured value (`Arrays.fill(password, '\0')`) before the
+      lambda goes out of scope, and prefer passing values through narrow
+      method parameters rather than capturing them into anonymous classes.
+
+  - id: COROUTINE_STATE_MACHINE_LEAKS_TOKEN
+    title: Suspend function state machine retains a credential field
+    description: >
+      Kotlin coroutine state machines are generated as inner classes whose
+      fields hold every suspended local. When a `suspend` function holds a
+      bearer token in a local across an `await`, the token survives in the
+      `$result` / `L$0` / `L$1` slots until the continuation is GC'd —
+      observable via heap dump or persisted continuation.
+    severity: MEDIUM
+    confidence: LOW
+    category: PRIVACY
+    cwe: CWE-316
+    cvss: 4.3
+    language: java
+    multiline: true
+    java_pattern: 'extends\s+kotlin\.coroutines\.jvm\.internal\.(?:ContinuationImpl|SuspendLambda)[\s\S]{0,800}(?:bearer|access_?token|refresh_?token|jwt)'
+    remediation: |
+      Pull the credential out of the suspend function and pass it through
+      a non-suspending helper that nulls the local before suspending again.
+
+  - id: SEALED_CLASS_DESERIALIZED_FROM_INTENT
+    title: Sealed class hierarchy deserialised from an Intent extra
+    description: >
+      Sealed classes are commonly used as a typed message envelope. When the
+      object is rehydrated from `Intent.getSerializableExtra` or
+      `getParcelableExtra` without a strict allow-list of subclasses, an
+      attacker IPC can supply an unexpected subclass and trigger code paths
+      the developer didn't intend (CWE-502).
+    severity: HIGH
+    confidence: MEDIUM
+    category: IPC
+    cwe: CWE-502
+    cvss: 7.5
+    language: java
+    multiline: true
+    java_pattern: 'getSerializableExtra\([\s\S]{0,80}sealed[\s\S]{0,400}'
+    remediation: |
+      Use `getParcelableExtra(name, ExpectedSubtype.class)` (API 33+) or
+      manually cast and reject any subclass not in your fixed allow-list.
+
+  - id: COMPOSE_REMEMBER_HOLDS_SECRET
+    title: Jetpack Compose remember{} holds a credential across recompositions
+    description: >
+      `remember { mutableStateOf(password) }` keeps the secret in the
+      composition's state map for as long as the composable is in the tree —
+      typically much longer than the user's input flow. Heap dumps and
+      `dumpsys` will reveal it.
+    severity: LOW
+    confidence: LOW
+    category: PRIVACY
+    cwe: CWE-316
+    cvss: 3.7
+    language: java
+    multiline: true
+    java_pattern: 'remember\([\s\S]{0,100}mutableStateOf\([^)]*?(password|secret|pin|token)'
+    remediation: |
+      Wrap secrets in a `SnapshotMutationPolicy` that zeros the buffer on
+      replacement, or hold them in a ViewModel that explicitly clears the
+      backing field on `onCleared()`.
+
+  - id: KOTLIN_LAZY_INIT_REFLECTION
+    title: kotlin.Lazy initializer uses reflection to load a class name from prefs
+    description: >
+      A `Lazy<...>` initializer reads a class name from SharedPreferences /
+      Intent / network and calls `Class.forName(name).newInstance()`. The
+      resulting object is cached and reused for the process lifetime, so a
+      one-time pollution of the prefs becomes persistent code execution.
+    severity: HIGH
+    confidence: MEDIUM
+    category: REFLECTION
+    cwe: CWE-470
+    cvss: 7.8
+    language: java
+    multiline: true
+    java_pattern: 'kotlin\.Lazy[\s\S]{0,300}Class\.forName\([\s\S]{0,200}(getSharedPreferences|getStringExtra|getIntent)'
+    remediation: |
+      Validate the class name against a hard-coded allow-list before passing
+      it to `Class.forName`, and prefer DI registration over reflective lookup.

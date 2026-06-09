@@ -308,10 +308,33 @@ class SecretDetector:
         strings: list[str],
         source_hint: str = "<dex string pool>",
     ) -> list[Finding]:
-        """Scan a list of string literals extracted from the DEX."""
+        """Scan a list of string literals extracted from the DEX.
+
+        Each string is scanned twice: once raw, once after best-effort
+        deobfuscation. This catches secrets hidden behind Base64/hex/XOR
+        wrappers — modern packers (Bangcle, Tencent Legu) hide URLs and API
+        keys behind exactly these encodings, and re-scanning the decoded
+        forms recovers them without changing detector logic.
+        """
+        from apkanalyzer.utils.deobfuscate import deobfuscate_strings
+
         findings: list[Finding] = []
         for s in strings:
             findings.extend(self._check_string(s, source_hint, None, 0))
+
+        decoded_map = deobfuscate_strings(strings)
+        for original, decoded in decoded_map.items():
+            for f in self._check_string(
+                decoded, source_hint, None, 0,
+            ):
+                # Tag the finding so reviewers know it came from a decoded
+                # form, and the evidence shows both shapes for triage.
+                f.evidence = (
+                    f"decoded from obfuscated string {_truncate(original, 60)} → "
+                    f"{_truncate(decoded, 80)}"
+                )
+                f.rule_id = f"{f.rule_id}_OBFUSCATED"
+                findings.append(f)
         return self._deduplicate(findings)
 
     def scan_file(self, content: str, file_path: str) -> list[Finding]:
@@ -425,3 +448,7 @@ class SecretDetector:
                 seen.add(key)
                 result.append(f)
         return result
+
+
+def _truncate(s: str, n: int) -> str:
+    return s if len(s) <= n else s[:n] + "…"

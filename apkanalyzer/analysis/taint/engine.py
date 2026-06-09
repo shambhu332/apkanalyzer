@@ -66,6 +66,7 @@ Inter-procedural details
 from __future__ import annotations
 
 import logging
+import os
 import re
 from collections import deque
 from typing import Optional
@@ -86,6 +87,11 @@ from apkanalyzer.ir.cfg_builder import build_cfg
 from apkanalyzer.analysis.taint.sources import TaintSourceSpec, build_source_index
 from apkanalyzer.analysis.taint.sinks import TaintSinkSpec, build_sink_index
 from apkanalyzer.analysis.taint.sanitizers import SanitizerSpec, build_sanitizer_index
+from apkanalyzer.analysis.taint.native_summaries import (
+    NativeSummary,
+    autoload_default_bestiary,
+    build_native_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +112,29 @@ _ELEM_KEY = "__elem__"
 # OkHttp Interceptor / Volley Response.Listener / RxJava Observer style fan-out
 # without blowing up on Iterable.iterator() or similar universal interfaces.
 _CHA_MAX_TARGETS = 4
+
+# Per-method worklist iteration budget. Big methods (Kotlin coroutine state
+# machines, generated parsers) can need more than the default to converge.
+# Tunable via APKANALYZER_WORKLIST_FACTOR (default 30 — block-count multiplier)
+# and APKANALYZER_WORKLIST_BASE (default 200 — additive floor). Leave at
+# default for typical apps; raise on the rare app where the truncation
+# warning fires too often.
+try:
+    _WORKLIST_FACTOR = max(1, int(os.environ.get("APKANALYZER_WORKLIST_FACTOR", "30")))
+except ValueError:
+    _WORKLIST_FACTOR = 30
+try:
+    _WORKLIST_BASE = max(50, int(os.environ.get("APKANALYZER_WORKLIST_BASE", "200")))
+except ValueError:
+    _WORKLIST_BASE = 200
+
+# k=1 call-site context: summaries are keyed by (full_name, frozen-input-shape)
+# rather than full_name alone. Disabling falls back to the old k=0 behaviour
+# for direct comparison (debugging FP claims). Default on — context sensitivity
+# is the single biggest precision win documented in the FlowDroid paper.
+_CONTEXT_SENSITIVE = os.environ.get(
+    "APKANALYZER_CONTEXT_SENSITIVE", "1"
+).lower() not in ("0", "false", "no")
 
 # Method-name fragments (matched against the raw invoke instruction) that move
 # data INTO a container — argument taint flows to the receiver as element-tagged
@@ -134,6 +163,54 @@ _COLL_READ_PATTERNS = (
 )
 
 from apkanalyzer.utils.test_class import is_test_class as _is_test_class
+
+
+# ---------------------------------------------------------------------------
+# Field-sensitive label helpers
+# ---------------------------------------------------------------------------
+#
+# Labels are encoded as `<base>` or `<base>@<field>[.field…]`. The chain is
+# read left-to-right ("outer.inner.deepest") so iput-then-iput naturally
+# extends the chain on the host's host object. iget peels one component off
+# the chain; mismatching field reads drop to the empty set, which preserves
+# the precision win.
+#
+# A bare label ("DEVICE_ID") means the *object itself* is tainted — that
+# state propagates through both iget (any field read still sees the bare
+# taint) and method call arguments. This conservatism keeps simple cases
+# working when we don't have field-level provenance.
+
+def _stamp_field(labels: set[str], field_name: str) -> set[str]:
+    """Apply an iput-style field write — push `field` to the front of each
+    label's chain. `LABEL` → `LABEL@field`; `LABEL@a.b` → `LABEL@field.a.b`."""
+    out: set[str] = set()
+    for lbl in labels:
+        if _FIELD_SEP in lbl:
+            base, chain = lbl.split(_FIELD_SEP, 1)
+            out.add(f"{base}{_FIELD_SEP}{field_name}.{chain}")
+        else:
+            out.add(f"{lbl}{_FIELD_SEP}{field_name}")
+    return out
+
+
+def _strip_field(labels: set[str], field_name: str) -> set[str]:
+    """Apply an iget-style field read — peel `field` off each chain.
+
+    `LABEL@field` → `LABEL`. `LABEL@field.rest` → `LABEL@rest`. Labels for
+    a different field name drop entirely (precision). Bare `LABEL` means
+    the host object itself is tainted, so the read inherits that label.
+    """
+    out: set[str] = set()
+    for lbl in labels:
+        if _FIELD_SEP not in lbl:
+            out.add(lbl)
+            continue
+        base, chain = lbl.split(_FIELD_SEP, 1)
+        if chain == field_name:
+            out.add(base)
+        elif chain.startswith(f"{field_name}."):
+            out.add(f"{base}{_FIELD_SEP}{chain[len(field_name) + 1:]}")
+    return out
 
 
 def _extract_invoke_parts(instr: dict) -> Optional[tuple[str, str, str, list[str]]]:
@@ -322,6 +399,7 @@ class TaintEngine:
         extra_sources: Optional[list[TaintSourceSpec]] = None,
         extra_sinks: Optional[list[TaintSinkSpec]] = None,
         extra_sanitizers: Optional[list[SanitizerSpec]] = None,
+        extra_native_summaries: Optional[list[NativeSummary]] = None,
     ) -> None:
         self.cg = call_graph
         self.dx = dx
@@ -330,6 +408,16 @@ class TaintEngine:
         self.source_index = build_source_index(extra_sources)
         self.sink_index = build_sink_index(extra_sinks)
         self.sanitizer_index = build_sanitizer_index(extra_sanitizers)
+
+        # JNI bestiary: autoload `rules/native_summaries.yaml` plus any
+        # caller-supplied `extra_native_summaries`. Bridges the Java→C
+        # boundary so native decrypt/encrypt/hash/source/sink calls don't
+        # appear as black holes to the dataflow.
+        autoloaded = autoload_default_bestiary()
+        merged_native = list(autoloaded)
+        if extra_native_summaries:
+            merged_native.extend(extra_native_summaries)
+        self.native_index = build_native_index(merged_native)
 
         # Precomputed sanitizer-label → set(neutralised sink labels) so the
         # per-sink check is O(1) instead of O(N²) over all sanitizer specs.
@@ -349,8 +437,10 @@ class TaintEngine:
 
         # Cache of built CFGs to avoid re-building
         self._cfg_cache: dict[str, CFGMethod] = {}
-        # Memoise full method summaries (exit state + emitted paths)
-        self._method_summaries: dict[str, MethodSummary] = {}
+        # Memoise full method summaries (exit state + emitted paths). Keyed by
+        # (full_name, input_shape) when k=1 context sensitivity is enabled —
+        # see _summary_key below. The legacy k=0 mode keys on full_name alone.
+        self._method_summaries: dict[tuple, MethodSummary] = {}
 
         # Engine-wide static-field taint map. Static fields persist across
         # method calls and across the whole analysis run, so they live here
@@ -429,6 +519,34 @@ class TaintEngine:
             logger.debug("CFG build failed for %s: %s", key, exc)
             return None
 
+    def _summary_key(
+        self, desc: MethodDescriptor, initial_state: Optional[MethodTaintState],
+    ) -> tuple:
+        """
+        Produce a (full_name, input_shape) key for the summary cache.
+
+        With k=1 context sensitivity (default), input_shape is a frozen
+        signature of which parameter registers carry which taint labels —
+        callers with structurally distinct input states get distinct
+        summaries, so a helper called once with sanitised data and once with
+        raw data no longer conflates the two paths.
+
+        Falls back to k=0 (full_name only) when context sensitivity is
+        disabled — useful for FP-rate diff testing.
+        """
+        if not _CONTEXT_SENSITIVE:
+            return (desc.full_name,)
+        if initial_state is None:
+            return (desc.full_name, ())
+        # Hash only the parameter slots ("p0", "p1", …) — local registers
+        # haven't been touched yet and don't characterise the input shape.
+        shape = tuple(sorted(
+            (reg, frozenset(labels))
+            for reg, labels in initial_state.regs.items()
+            if reg.startswith("p") and labels
+        ))
+        return (desc.full_name, shape)
+
     def _analyse_method(
         self,
         desc: MethodDescriptor,
@@ -445,9 +563,18 @@ class TaintEngine:
         if depth > self.max_depth:
             return []
 
+        summary_key = self._summary_key(desc, initial_state)
+
+        # Cache hit — replay the previously emitted paths under this exact
+        # input shape. With k=1 the same helper called from a sanitised
+        # context and an unsanitised context yields two distinct summaries,
+        # closing the FP gap that flat memoisation produced.
+        if summary_key in self._method_summaries:
+            return list(self._method_summaries[summary_key].paths)
+
         # Re-visit handling — replay cached paths instead of returning [].
         if desc.full_name in visited:
-            cached = self._method_summaries.get(desc.full_name)
+            cached = self._method_summaries.get(summary_key)
             if cached:
                 # Re-emit each previously found path with the current chain
                 # prefix so deduplication still folds them by sink offset.
@@ -474,7 +601,7 @@ class TaintEngine:
         return_taint: set[str] = set()
 
         iterations = 0
-        max_iterations = len(cfg.blocks) * 10 + 100
+        max_iterations = len(cfg.blocks) * _WORKLIST_FACTOR + _WORKLIST_BASE
 
         while worklist and iterations < max_iterations:
             iterations += 1
@@ -514,7 +641,7 @@ class TaintEngine:
         if return_taint:
             final_state.regs[_RETURN_REG] = set(return_taint)
 
-        self._method_summaries[desc.full_name] = MethodSummary(final_state, found_paths)
+        self._method_summaries[summary_key] = MethodSummary(final_state, found_paths)
 
         return found_paths
 
@@ -582,26 +709,15 @@ class TaintEngine:
                                     state.record_source(lbl, src)
                     continue
 
-                # iget: read instance field from object register
+                # iget: read instance field from object register. Chain-aware
+                # — `LABEL@field.rest` becomes `LABEL@rest`, so two-level
+                # accesses (`a.b.c`) recover their original taint.
                 if len(operands) >= 2 and field_ref:
                     obj_reg = str(operands[1].get("value", ""))
                     obj_taint = state.get_taint(obj_reg)
                     if not obj_taint:
                         continue
-                    field_name = field_ref[1]
-                    suffix = f"{_FIELD_SEP}{field_name}"
-                    # Keep only labels stamped for this field; strip the
-                    # "@field" suffix so downstream sinks see the original
-                    # source label (DEVICE_ID, not DEVICE_ID@token).
-                    matching = {
-                        lbl[: -len(suffix)] for lbl in obj_taint
-                        if lbl.endswith(suffix)
-                    }
-                    # Bare object taint (no field suffix) means the object
-                    # itself is tainted (e.g. came straight from a source);
-                    # still propagate it conservatively.
-                    bare = {lbl for lbl in obj_taint if _FIELD_SEP not in lbl}
-                    state.taint(dst_reg, matching | bare)
+                    state.taint(dst_reg, _strip_field(obj_taint, field_ref[1]))
                 continue
 
             # ── Field writes: iput / sput ─────────────────────────────
@@ -623,22 +739,22 @@ class TaintEngine:
                                     src_map.setdefault(lbl, src_obj)
                     continue
 
-                # iput: tag host object with composite labels per field
+                # iput: tag host object with composite labels per field.
+                # Chain-aware — writing a tainted struct (`LABEL@inner`) into
+                # an outer field `f` yields `LABEL@f.inner`, so subsequent
+                # `iget f` then `iget inner` recovers the original label.
                 if len(operands) >= 2 and field_ref:
                     src_reg = str(operands[0].get("value", ""))
                     obj_reg = str(operands[1].get("value", ""))
                     src_taint = state.get_taint(src_reg)
                     if src_taint:
-                        composite = {
-                            f"{lbl}{_FIELD_SEP}{field_ref[1]}" for lbl in src_taint
-                            if _FIELD_SEP not in lbl
-                        }
-                        state.taint(obj_reg, composite)
+                        state.taint(obj_reg, _stamp_field(src_taint, field_ref[1]))
                 continue
 
             # ── Array element writes (aput / aput-object / aput-*) ────
-            # Mirrors iput: tag the array register with element-suffixed
-            # composite labels so a later aget can recover the source.
+            # Reuses the chain-aware iput machinery with the synthetic
+            # __elem__ field so writing a tainted struct into an array
+            # preserves its inner field provenance.
             if mnemonic.startswith("aput"):
                 operands = instr.get("operands", [])
                 if len(operands) >= 2:
@@ -646,11 +762,7 @@ class TaintEngine:
                     arr_reg = str(operands[1].get("value", ""))
                     src_taint = state.get_taint(src_reg)
                     if src_taint:
-                        composite = {
-                            f"{lbl}{_FIELD_SEP}{_ELEM_KEY}" for lbl in src_taint
-                            if _FIELD_SEP not in lbl
-                        }
-                        state.taint(arr_reg, composite)
+                        state.taint(arr_reg, _stamp_field(src_taint, _ELEM_KEY))
                 continue
 
             # ── Array element reads (aget / aget-object / aget-*) ─────
@@ -661,13 +773,7 @@ class TaintEngine:
                     arr_reg = str(operands[1].get("value", ""))
                     arr_taint = state.get_taint(arr_reg)
                     if arr_taint:
-                        elem_suffix = f"{_FIELD_SEP}{_ELEM_KEY}"
-                        propagated = {
-                            lbl[: -len(elem_suffix)] for lbl in arr_taint
-                            if lbl.endswith(elem_suffix)
-                        }
-                        bare = {lbl for lbl in arr_taint if _FIELD_SEP not in lbl}
-                        state.taint(dst_reg, propagated | bare)
+                        state.taint(dst_reg, _strip_field(arr_taint, _ELEM_KEY))
                 continue
 
             # ── StringBuilder/StringBuffer append (string concat) ──
@@ -715,6 +821,80 @@ class TaintEngine:
                         register=_RESULT_REG,
                     ))
 
+            # ── Native / JNI summary bridging ─────────────────────────
+            # The static analyser cannot follow a Java_*_* native method
+            # into the .so, so without summaries the call swallows taint.
+            # The bestiary lets us model the typical patterns (decrypt
+            # propagates input → output; loadKey synthesises a CRYPTO_KEY
+            # source; native_post is itself a NETWORK_OUT sink).
+            native_specs = self.native_index.lookup(class_name, method_name)
+            if native_specs:
+                native_propagated: set[str] = set()
+                for nspec in native_specs:
+                    # Native sources stamp synthetic labels onto the result.
+                    for syn_label in nspec.taints_return:
+                        native_propagated.add(syn_label)
+                        state.record_source(syn_label, TaintSource(
+                            method=current_method,
+                            block_id=block.block_id,
+                            offset=offset,
+                            label=syn_label,
+                            register=_RESULT_REG,
+                        ))
+                    # Argument → return propagation (the "decrypt" pattern).
+                    is_static_call = "static" in mnemonic
+                    arg_offset = 0 if is_static_call else 1
+                    for arg_idx in nspec.propagate_args:
+                        adj = arg_idx + arg_offset
+                        if 0 <= adj < len(arg_regs):
+                            native_propagated |= state.get_taint(arg_regs[adj])
+                    # Native sinks: emit a finding immediately, mirroring the
+                    # generic sink handling below but using the native spec.
+                    for arg_idx, sink_label in nspec.sinks_args:
+                        adj = arg_idx + arg_offset
+                        if not (0 <= adj < len(arg_regs)):
+                            continue
+                        target_reg = arg_regs[adj]
+                        sink_taint = state.get_taint(target_reg)
+                        if not sink_taint:
+                            continue
+                        applied_sans = state.get_sanitizers(target_reg)
+                        covers = any(
+                            sink_label in self._sanitizer_neutralizes.get(s, set())
+                            for s in applied_sans
+                        )
+                        if covers:
+                            neutralization = "full"
+                        elif applied_sans:
+                            neutralization = "partial"
+                        else:
+                            neutralization = "none"
+                        snk_obj = TaintSink(
+                            method=current_method,
+                            block_id=block.block_id,
+                            offset=offset,
+                            label=sink_label,
+                            register=target_reg,
+                        )
+                        seen_bases: set[str] = set()
+                        for label in sink_taint:
+                            base = label.split(_FIELD_SEP, 1)[0]
+                            if base in seen_bases:
+                                continue
+                            seen_bases.add(base)
+                            src_obj = state.get_source(base) or state.get_source(label)
+                            if src_obj is not None:
+                                local_paths.append(
+                                    (src_obj, snk_obj, [current_method], neutralization)
+                                )
+                    # Sanitisers: stamp the configured label on each arg.
+                    for arg_idx, san_label in nspec.sanitises_args:
+                        adj = arg_idx + arg_offset
+                        if 0 <= adj < len(arg_regs):
+                            state.sanitize(arg_regs[adj], san_label)
+                if native_propagated:
+                    last_invoke_taint = (last_invoke_taint or set()) | native_propagated
+
             # Sanitizer rules
             for san_spec in self.sanitizer_index.get(class_name, []):
                 if san_spec.method_pattern in (method_name, "*"):
@@ -734,34 +914,28 @@ class TaintEngine:
                 for arg_reg in arg_regs[1:]:
                     elem_taint |= state.get_taint(arg_reg)
                 if elem_taint:
-                    composite = {
-                        f"{lbl}{_FIELD_SEP}{_ELEM_KEY}" for lbl in elem_taint
-                        if _FIELD_SEP not in lbl
-                    }
-                    state.taint(receiver, composite)
+                    stamped = _stamp_field(elem_taint, _ELEM_KEY)
+                    state.taint(receiver, stamped)
                     for lbl in elem_taint:
                         base = lbl.split(_FIELD_SEP, 1)[0]
                         src_obj = state.get_source(base) or state.get_source(lbl)
                         if src_obj is not None:
-                            state.record_source(f"{base}{_FIELD_SEP}{_ELEM_KEY}", src_obj)
+                            for stamped_lbl in stamped:
+                                if stamped_lbl.startswith(base):
+                                    state.record_source(stamped_lbl, src_obj)
             if arg_regs and any(p in raw for p in _COLL_READ_PATTERNS):
                 receiver = arg_regs[0]
                 recv_taint = state.get_taint(receiver)
                 if recv_taint:
-                    elem_suffix = f"{_FIELD_SEP}{_ELEM_KEY}"
-                    propagated = {
-                        lbl[: -len(elem_suffix)] for lbl in recv_taint
-                        if lbl.endswith(elem_suffix)
-                    }
-                    bare = {lbl for lbl in recv_taint if _FIELD_SEP not in lbl}
-                    yielded = propagated | bare
+                    yielded = _strip_field(recv_taint, _ELEM_KEY)
                     if yielded:
                         last_invoke_taint = last_invoke_taint | yielded
                         for lbl in yielded:
-                            src_obj = state.get_source(lbl)
+                            base = lbl.split(_FIELD_SEP, 1)[0]
+                            src_obj = state.get_source(lbl) or state.get_source(base)
                             if src_obj is None:
                                 src_obj = state.get_source(
-                                    f"{lbl}{_FIELD_SEP}{_ELEM_KEY}"
+                                    f"{base}{_FIELD_SEP}{_ELEM_KEY}"
                                 )
                             if src_obj is not None:
                                 state.record_source(lbl, src_obj)
@@ -847,9 +1021,25 @@ class TaintEngine:
 
                 cha_return_taint: set[str] = set()
                 for tgt_desc in inline_targets:
+                    # Build the callee's initial state up-front so the
+                    # context-sensitive cache key matches what we'd compute
+                    # if we re-entered _analyse_method.
+                    callee_init = MethodTaintState()
+                    for i, reg in enumerate(arg_regs):
+                        labels = state.get_taint(reg)
+                        if labels:
+                            callee_init.taint(f"p{i}", labels)
+                            for lbl in labels:
+                                src_obj = state.get_source(
+                                    lbl.split(_FIELD_SEP, 1)[0]
+                                )
+                                if src_obj is not None:
+                                    callee_init.record_source(lbl, src_obj)
+                    callee_key = self._summary_key(tgt_desc, callee_init)
+
                     if tgt_desc.full_name in visited:
                         # Recursive / mutually-recursive: replay cached paths
-                        cached = self._method_summaries.get(tgt_desc.full_name)
+                        cached = self._method_summaries.get(callee_key)
                         if cached:
                             for src, snk, chain, neutralization in cached.paths:
                                 callee_paths.append(
@@ -859,18 +1049,6 @@ class TaintEngine:
                             if ret:
                                 cha_return_taint |= set(ret)
                     else:
-                        callee_init = MethodTaintState()
-                        for i, reg in enumerate(arg_regs):
-                            labels = state.get_taint(reg)
-                            if labels:
-                                callee_init.taint(f"p{i}", labels)
-                                for lbl in labels:
-                                    src_obj = state.get_source(
-                                        lbl.split(_FIELD_SEP, 1)[0]
-                                    )
-                                    if src_obj is not None:
-                                        callee_init.record_source(lbl, src_obj)
-
                         sub_paths = self._analyse_method(
                             tgt_desc, depth + 1, visited, callee_init
                         )
@@ -882,7 +1060,7 @@ class TaintEngine:
                         # Propagate callee return taint back into caller —
                         # union across all CHA alternatives so any one of
                         # them returning tainted data taints the caller.
-                        callee_summary = self._method_summaries.get(tgt_desc.full_name)
+                        callee_summary = self._method_summaries.get(callee_key)
                         if callee_summary is not None:
                             ret = callee_summary.exit_state.regs.get(_RETURN_REG)
                             if ret:
