@@ -751,6 +751,15 @@ def _run_scan(scan_id: str, apk_path: str, confidence: str, taint_depth: int) ->
             Path(apk_path).unlink(missing_ok=True)
         except OSError:
             pass
+        # Evict completed/failed in-memory entry after a short TTL so the
+        # live queue objects and cached report dict don't accumulate forever.
+        # 300 s is enough for any SSE consumer to drain the queue and for
+        # /result/<scan_id> to be called once; durable state lives in ScanStore.
+        def _evict_later(sid: str, delay: int = 300) -> None:
+            time.sleep(delay)
+            with _scans_lock:
+                _scans.pop(sid, None)
+        threading.Thread(target=_evict_later, args=(scan_id,), daemon=True).start()
 
 
 if __name__ == "__main__":
