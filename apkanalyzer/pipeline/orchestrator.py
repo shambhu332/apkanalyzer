@@ -175,6 +175,7 @@ class AnalysisPipeline:
         # caching skips the SQLite open entirely.
         self._detector_cache = None
         self._taint_truncated: list[str] = []
+        self._class_names: list[str] = []
         if enable_detector_cache:
             try:
                 from apkanalyzer.cache.scan_cache import ScanCache
@@ -263,6 +264,8 @@ class AnalysisPipeline:
             progress.update(task, description="Collecting reachable methods…")
             _notify("Detector Analysis", "Collecting reachable methods", 54)
             self._candidates = self._collect_candidates(reachable)
+            # Collect class names ONCE here — used by SDK, Tracker, SBOM, Plugins.
+            self._class_names = self._collect_class_names()
 
             progress.update(task, description="Per-method detectors (parallel)…")
             _notify("Detector Analysis",
@@ -296,7 +299,6 @@ class AnalysisPipeline:
             progress.update(task, description="SBOM + CVE lookup…")
             _notify("SBOM", "Building component inventory + CVE lookup", 82)
             self._findings.extend(self._run_sbom())
-
             progress.update(task, description="YAML rule engine…")
             _notify("Rule Engine", "Pattern-based safety net", 88)
             self._findings.extend(self._run_yaml_rules())
@@ -687,27 +689,19 @@ class AnalysisPipeline:
 
     def _run_sdk_scan(self) -> list[Finding]:
         detector = SDKDetector()
-        class_names = self._collect_class_names()
         pkg = self._ctx.manifest.get("package", "")
-        return detector.analyse_classes(class_names, pkg)
+        return detector.analyse_classes(self._class_names, pkg)
 
     def _run_tracker_scan(self) -> list[Finding]:
         try:
-            return TrackerDetector().analyse_classes(self._collect_class_names())
+            return TrackerDetector().analyse_classes(self._class_names)
         except Exception as exc:
             logger.warning("Tracker detector failed: %s", exc)
             return []
 
     def _run_sbom(self) -> list[Finding]:
-        """
-        Build the SBOM, look up bundled libraries against the offline CVE
-        feed, and write `sbom.cdx.json` next to the report so downstream
-        tooling (Dependency-Track, Trivy, GitHub dependency-graph) can
-        consume it directly.
-        """
         try:
-            class_names = self._collect_class_names()
-            findings, sbom = SBOMDetector().analyse(self._ctx, class_names)
+            findings, sbom = SBOMDetector().analyse(self._ctx, self._class_names)
             write_sbom(sbom, str(self.output_dir / "sbom.cdx.json"))
             self._sbom = sbom
             return findings
@@ -783,13 +777,11 @@ class AnalysisPipeline:
         if not plugins:
             return []
         findings: list[Finding] = []
-        class_names = self._collect_class_names()
         pkg = self._ctx.manifest.get("package", "")
-
         for plugin in plugins:
             try:
                 findings.extend(plugin.analyse_manifest(self._ctx.manifest))
-                findings.extend(plugin.analyse_classes(class_names, pkg))
+                findings.extend(plugin.analyse_classes(self._class_names, pkg))
                 for cfg, desc, rs in self._candidates:
                     findings.extend(plugin.analyse_method(cfg, desc, rs))
             except Exception as exc:
