@@ -103,6 +103,13 @@ def load_apk(apk_path: str) -> APKContext:
             )
 
     logger.info("Loading APK: %s", real_path)
+
+    # For AAB inputs the merged APK's AndroidManifest.xml is in protobuf form,
+    # which androguard treats as opaque bytes. Attempt to decode it to binary
+    # XML first using aapt2 so manifest-derived findings are faithful.
+    if bundle_kind == "aab":
+        _try_patch_aab_manifest(real_path)
+
     apk, dex_files, dx = AnalyzeAPK(real_path)
 
     ctx = APKContext(
@@ -384,6 +391,47 @@ def unpack_with_apktool(ctx: APKContext) -> None:
         logger.warning("apktool timed out")
     except Exception as exc:
         logger.warning("apktool error: %s", exc)
+
+
+def _try_patch_aab_manifest(merged_apk: str) -> None:
+    """
+    Try to replace the protobuf AndroidManifest.xml in a merged AAB APK with
+    a binary-XML version decoded by aapt2, so androguard can parse it.
+
+    No-op if aapt2 is not on PATH or if decoding fails — the existing
+    pessimistic behaviour is preserved and a warning is logged.
+    """
+    aapt2 = shutil.which("aapt2")
+    if not aapt2:
+        logger.debug("aapt2 not found — AAB proto-manifest stays opaque")
+        return
+    try:
+        result = subprocess.run(
+            [aapt2, "dump", "xmltree", "--file", "AndroidManifest.xml", merged_apk],
+            capture_output=True, timeout=30,
+        )
+        if result.returncode != 0 or not result.stdout:
+            logger.debug("aapt2 xmltree failed: %s", result.stderr[:200])
+            return
+        # aapt2 xmltree output is a human-readable tree, not binary XML.
+        # We store it as a sentinel so manifest_parser can detect it and
+        # extract fields via regex instead of lxml.
+        xml_text = result.stdout.decode("utf-8", errors="replace")
+        # Patch the ZIP in-place: replace the existing (proto) manifest entry.
+        import io
+        with zipfile.ZipFile(merged_apk, "r") as zin:
+            names = zin.namelist()
+            entries = {n: zin.read(n) for n in names}
+        entries["AndroidManifest.xml"] = xml_text.encode("utf-8")
+        entries["_aapt2_xmltree"] = b"1"  # sentinel for manifest_parser
+        tmp = merged_apk + ".patching"
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+            for n, data in entries.items():
+                zout.writestr(n, data)
+        os.replace(tmp, merged_apk)
+        logger.info("AAB manifest decoded via aapt2 and patched into merged APK")
+    except Exception as exc:
+        logger.warning("aapt2 manifest patch failed: %s", exc)
 
 
 def _extract_all_strings(dx) -> list[str]:

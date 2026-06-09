@@ -118,6 +118,12 @@ def parse_manifest(apk) -> dict:
         p for p in result["permissions"] if p in DANGEROUS_PERMISSIONS
     ]
 
+    # For AAB-derived merged APKs the manifest may be in protobuf form and
+    # androguard returns empty/opaque content. Detect this and fall back to
+    # the aapt2 xmltree text that extractor.py may have stored in the ZIP.
+    if not result["package"]:
+        _try_aapt2_fallback(apk, result)
+
     try:
         manifest_xml = apk.get_android_manifest_axml().get_xml()
         root = ET.fromstring(manifest_xml)
@@ -261,3 +267,52 @@ def parse_manifest(apk) -> dict:
         })
 
     return result
+
+
+def _try_aapt2_fallback(apk, result: dict) -> None:
+    """
+    When androguard can't parse the manifest (AAB proto form), attempt to read
+    the aapt2 xmltree text that extractor._try_patch_aab_manifest stored in
+    the merged APK under the '_aapt2_xmltree' sentinel entry.
+
+    Extracts package, debuggable, usesCleartextTraffic, minSdk, targetSdk,
+    and uses-permission entries via regex on the human-readable aapt2 tree.
+    """
+    import re
+    import zipfile as _zf
+
+    try:
+        apk_path = apk.get_filename() if hasattr(apk, "get_filename") else None
+        if not apk_path:
+            return
+        with _zf.ZipFile(apk_path) as z:
+            if "_aapt2_xmltree" not in z.namelist():
+                return
+            tree = z.read("AndroidManifest.xml").decode("utf-8", errors="replace")
+    except Exception:
+        return
+
+    def _find(pattern: str) -> str | None:
+        m = re.search(pattern, tree)
+        return m.group(1) if m else None
+
+    pkg = _find(r'package=\(.*?\)"([^"]+)"')
+    if pkg:
+        result["package"] = pkg
+    min_sdk = _find(r'minSdkVersion[^=]*=\(.*?\)"?(\d+)"?')
+    if min_sdk:
+        result["min_sdk"] = min_sdk
+    target_sdk = _find(r'targetSdkVersion[^=]*=\(.*?\)"?(\d+)"?')
+    if target_sdk:
+        result["target_sdk"] = target_sdk
+    if re.search(r'debuggable[^=]*=\(.*?\)0x1', tree):
+        result["debuggable"] = True
+    if re.search(r'usesCleartextTraffic[^=]*=\(.*?\)0x1', tree):
+        result["uses_cleartext_traffic"] = True
+    perms = re.findall(r'uses-permission.*?name=\(.*?\)"([^"]+)"', tree)
+    if perms:
+        result["permissions"] = list(set(result["permissions"]) | set(perms))
+        result["dangerous_permissions"] = [
+            p for p in result["permissions"] if p in DANGEROUS_PERMISSIONS
+        ]
+    logger.info("AAB manifest fields recovered via aapt2 xmltree fallback")
