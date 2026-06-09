@@ -174,6 +174,7 @@ class AnalysisPipeline:
         # Lazily initialised in _run_per_method_detectors so that disabling
         # caching skips the SQLite open entirely.
         self._detector_cache = None
+        self._taint_truncated: list[str] = []
         if enable_detector_cache:
             try:
                 from apkanalyzer.cache.scan_cache import ScanCache
@@ -374,7 +375,9 @@ class AnalysisPipeline:
             extra_sanitizers=list(self.extra_sanitizers) + yaml_sanitizers,
             extra_native_summaries=self.extra_native_summaries,
         )
-        return engine.run(reachable)
+        findings = engine.run(reachable)
+        self._taint_truncated = engine._truncated_methods
+        return findings
 
     def _collect_candidates(self, reachable: set[str]) -> list[tuple]:
         """
@@ -845,6 +848,12 @@ class AnalysisPipeline:
         if getattr(self._ctx, "bundle_kind", None):
             metadata["bundle_kind"] = self._ctx.bundle_kind
             metadata["merged_splits"] = list(self._ctx.merged_splits or [])
+        # Surface taint truncation warnings so users know analysis was partial
+        if self._taint_truncated:
+            metadata["analysis_warnings"] = [
+                f"Taint worklist truncated in {m} — results may be partial"
+                for m in self._taint_truncated[:20]
+            ]
 
         # Quark-style behaviour scoring runs over the final filtered+enriched
         # findings list so it sees the same picture the user does. Empty
